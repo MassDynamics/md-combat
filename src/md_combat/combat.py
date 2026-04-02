@@ -7,11 +7,15 @@ Python translation of sva::ComBat (Johnson et al. 2007).
   Source: https://bioconductor.org/packages/sva (GPL-3)
 """
 
+import logging
+
 import numpy as np
 import pandas as pd
 from scipy.stats import norm
 
 from md_combat._helpers import _aprior, _bprior, _it_sol, _postmean
+
+logger = logging.getLogger(__name__)
 
 
 def _validate_batch_sizes(
@@ -94,7 +98,7 @@ class ComBat:
 
         batch_idx = {lvl: i for i, lvl in enumerate(batch_levels)}
 
-        print(f"Found {n_batch} batches")
+        logger.info(f"Found {n_batch} batches")
 
         # --- 1. Find zero-variance rows ---
         zero_rows = set()
@@ -107,7 +111,7 @@ class ComBat:
         keep_rows = np.array([i for i in range(data.shape[0]) if i not in zero_rows])
 
         if len(zero_rows) > 0:
-            print(
+            logger.info(
                 f"Found {len(zero_rows)} features with zero variance in a batch; "
                 "these will not be adjusted."
             )
@@ -121,7 +125,7 @@ class ComBat:
         mean_only = self.mean_only
         _validate_batch_sizes(batch_sizes, batch_levels, mean_only)
         if mean_only:
-            print("Using the 'mean only' version of ComBat")
+            logger.info("Using the 'mean only' version of ComBat")
 
         # --- 3. Build batch indicator matrix ---
         batchmod = np.zeros((n_samples, n_batch))
@@ -134,7 +138,7 @@ class ComBat:
                 raise ValueError(f"ref_batch '{self.ref_batch}' not found in batch labels")
             ref = batch_idx[self.ref_batch]
             batchmod[:, ref] = 1.0
-            print(f"Using batch '{self.ref_batch}' as reference (it will not change)")
+            logger.info(f"Using batch '{self.ref_batch}' as reference (it will not change)")
 
         # --- 4. Build full design matrix ---
         if mod is None:
@@ -150,7 +154,7 @@ class ComBat:
         design = design[:, keep_cols]
 
         n_covariates = design.shape[1] - n_batch
-        print(f"Adjusting for {n_covariates} covariate(s) or covariate level(s)")
+        logger.info(f"Adjusting for {n_covariates} covariate(s) or covariate level(s)")
 
         rank = np.linalg.matrix_rank(design)
         if rank < design.shape[1]:
@@ -176,10 +180,10 @@ class ComBat:
         has_na = np.any(np.isnan(data))
         if has_na:
             n_na = int(np.sum(np.isnan(data)))
-            print(f"Found {n_na} missing values")
+            logger.info(f"Found {n_na} missing values")
 
         # --- 6. Standardise data ---
-        print("Standardizing data across features")
+        logger.info("Standardizing data across features")
         XtX = design.T @ design
         XtY = design.T @ data.T
         B_hat = np.linalg.solve(XtX, XtY)
@@ -209,7 +213,7 @@ class ComBat:
         s_data = (data - stand_mean) / sd
 
         # --- 7. Estimate batch effect parameters ---
-        print("Fitting L/S model and finding priors")
+        logger.info("Fitting L/S model and finding priors")
         batch_design = design[:, :n_batch]
         gamma_hat = np.linalg.solve(
             batch_design.T @ batch_design,
@@ -235,7 +239,7 @@ class ComBat:
         delta_star = np.ones_like(delta_hat)
 
         if self.par_prior:
-            print("Finding parametric adjustments")
+            logger.info("Finding parametric adjustments")
             for i, lvl in enumerate(batch_levels):
                 mask = batch == lvl
                 batch_s_data = s_data[:, mask]
@@ -259,7 +263,7 @@ class ComBat:
                     gamma_star[i, :] = temp[0, :]
                     delta_star[i, :] = temp[1, :]
         else:
-            print("Finding non-parametric adjustments")
+            logger.info("Finding non-parametric adjustments")
             for i, lvl in enumerate(batch_levels):
                 mask = batch == lvl
                 batch_s_data = s_data[:, mask]
@@ -301,7 +305,7 @@ class ComBat:
         self.b_prior_ = b_prior if not mean_only else None
 
         # --- 10. Apply batch correction ---
-        print("Adjusting the data")
+        logger.info("Adjusting the data")
         bayes_data = s_data.copy()
 
         for i, lvl in enumerate(batch_levels):
