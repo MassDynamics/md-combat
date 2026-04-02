@@ -317,11 +317,11 @@ class ComBatSeq(_ComBatSeqBase):
         for g in range(n_genes):
             y = Y[g, :]
             try:
-                nb_mod = sm.NegativeBinomial(
-                    y, X, loglike_method="nb2", offset=offsets,
-                )
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
+                    nb_mod = sm.NegativeBinomial(
+                        y, X, loglike_method="nb2", offset=offsets,
+                    )
                     result = nb_mod.fit(disp=False, method="nm", maxiter=500)
                 phi_hat[g] = np.exp(result.params[-1]) if result.params[-1] < 20 else 1e8
                 gamma_hat[:, g] = result.params[:n_batch]
