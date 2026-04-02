@@ -9,19 +9,25 @@ requires-python = ">=3.13"
 dependencies = [
     "numpy>=1.24",
     "pandas>=2.0",
+    "pyarrow>=12",
     "scipy>=1.10",
     "statsmodels>=0.14",
 ]
 
 [project.optional-dependencies]
-e2e = ["rpy2~=3.5"]
-dev = ["pytest", "pytest-cov", "rpy2~=3.5", "ruff", "pre-commit"]
+dev = ["pytest", "pytest-cov", "ruff", "pre-commit", "jupyter", "nbconvert"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+"md_combat" = ["data/*.parquet"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
 
 [tool.ruff]
 line-length = 100

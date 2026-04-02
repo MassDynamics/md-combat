@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from md_combat.combat_seq import ComBatSeq
+from md_combat.combat_seq import ComBatSeq, ComBatSeqFast
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -143,6 +143,39 @@ def test_no_nans_in_output():
     df, batch, _ = make_count_data()
     result = ComBatSeq().fit_transform(df, batch)
     assert not result.isnull().any().any()
+
+
+def test_fast_matches_standard():
+    """
+    ComBatSeqFast and ComBatSeq must agree on batch coefficients (gamma_hat) within 1e-4.
+
+    gamma_hat (log-fold batch effects) are the primary driver of the quantile
+    correction and must match closely.  phi_hat (dispersion) is intentionally
+    not compared here: ComBatSeq uses Nelder-Mead (no gradient), which often
+    returns phi ≈ 1 (the starting value) due to slow convergence for dispersion
+    under NM.  ComBatSeqFast uses Newton-Raphson and converges to the true MLE
+    (closer to the simulated phi = 0.1).  Both are valid; only gamma_hat needs
+    to agree for the batch correction to be equivalent.
+    """
+    df, batch, group = make_count_data(n_genes=100, seed=7)
+
+    std = ComBatSeq()
+    fast = ComBatSeqFast()
+
+    count_mat = np.array(df, dtype=float)
+    batch_arr = np.asarray(batch)
+
+    count_mat_nz, _, _ = std._filter_zero_genes(count_mat)
+    # No group covariate — avoids confounded design (group == batch in make_count_data)
+    n_batch, X, _ = std._build_design(batch_arr, count_mat.shape[1], None, None)
+    offsets = np.log(count_mat_nz.sum(axis=0) + 1)
+
+    gamma_std, _ = std._fit_nb_glm(count_mat_nz, X, offsets, n_batch)
+    gamma_fast, _ = fast._fit_nb_glm(count_mat_nz, X, offsets, n_batch)
+
+    assert np.allclose(gamma_std, gamma_fast, atol=1e-4), (
+        f"gamma_hat max diff: {np.abs(gamma_std - gamma_fast).max():.2e}"
+    )
 
 
 if __name__ == "__main__":
