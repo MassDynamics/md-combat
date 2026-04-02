@@ -32,13 +32,54 @@ uv run pytest --cov=md_combat --cov-report=term-missing
 The e2e tests call `Rscript` as a subprocess. R version is auto-detected at
 runtime — tests skip cleanly if R or the required packages are not available.
 
+### 1 — Install R
+
+**macOS (recommended: use `rig` to manage R versions)**
+
 ```bash
-# Install R packages (only needed once per R installation)
-Rscript dependencies.R
+# Install rig — requires your sudo password once
+brew install --cask rig
+
+# Install the latest R release
+rig add release
 
 # Verify
-Rscript -e "library(sva); library(bladderbatch); cat('OK\n')"
+Rscript --version
 ```
+
+If `brew` is not installed: https://brew.sh
+
+**Alternative (macOS / Windows / Linux):** download the installer directly from
+https://cran.r-project.org and follow the prompts. After installation,
+`Rscript` should be on your `PATH`.
+
+### 2 — Install required R packages
+
+```bash
+# From the repo root — installs sva, bladderbatch, Biobase via Bioconductor
+Rscript dependencies.R
+```
+
+This takes a few minutes the first time (compiles some packages from source).
+
+### 3 — Verify
+
+```bash
+Rscript -e "library(sva); library(bladderbatch); cat('R env OK\n')"
+```
+
+### 4 — Record your R binary path (optional)
+
+If you have multiple R versions installed (via `rig`) and want to pin which one
+the e2e tests use, create `.claude-r-env` in the repo root:
+
+```bash
+# .claude-r-env is gitignored — safe to store local paths here
+export RSCRIPT_EXEC="Rscript4.5"   # or full path e.g. /usr/local/bin/Rscript
+```
+
+The e2e tests use plain `Rscript` by default and fall back through
+`Rscript4.5`, `Rscript4.4`, `Rscript4.3` automatically.
 
 ## CI/CD
 

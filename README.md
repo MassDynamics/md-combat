@@ -157,6 +157,53 @@ integer values.
 
 ---
 
+## R setup (for e2e tests)
+
+The unit tests have no R dependency. The e2e parity tests require R and the
+`sva` / `bladderbatch` Bioconductor packages. Follow these steps once per
+machine.
+
+### 1 — Install R
+
+**macOS (recommended):**
+
+```bash
+# Install rig — the R version manager (requires sudo password once)
+brew install --cask rig
+
+# Install the latest R release
+rig add release
+
+# Verify
+Rscript --version
+```
+
+`brew` not installed? See https://brew.sh
+
+**Other platforms:** download the installer from https://cran.r-project.org.
+After installation `Rscript` should be on your `PATH`.
+
+### 2 — Install required R packages
+
+```bash
+# From the repo root
+Rscript dependencies.R
+```
+
+This installs `sva`, `bladderbatch`, and `Biobase` via Bioconductor. It takes
+a few minutes the first time (some packages compile from source).
+
+### 3 — Verify
+
+```bash
+Rscript -e "library(sva); library(bladderbatch); cat('R env OK\n')"
+```
+
+If the e2e tests should be skipped (e.g. on a machine without R), no action is
+needed — they skip automatically when `Rscript` is not found on `PATH`.
+
+---
+
 ## End-to-end parity with R
 
 The test suite includes end-to-end tests that run the original R
