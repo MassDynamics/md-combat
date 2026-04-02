@@ -222,6 +222,50 @@ def test_combat_seq_airway_20k_fast_vs_standard(airway_20k_data):
 
 
 # ---------------------------------------------------------------------------
+# Airway e2e — 20K genes, uneven batches (2+4+2) — regression guard for
+# weighted grand_gamma and CDF shift fixes
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def airway_20k_uneven_data():
+    """
+    Load airway 20K subset with a 2+4+2 unequal batch split and R golden output.
+
+    Batch remap: A=N61311 (2 samples), B=N052611+N061011 (4 samples), C=N080611 (2 samples).
+    This exercises the batch-size-weighted grand_gamma and CDF shift corrections.
+    """
+    counts_df, _, group = load_airway()
+    gene_indices = _load_parquet("airway_20k_gene_ids.parquet")["gene_idx"].tolist()
+    counts_20k = counts_df.iloc[gene_indices]
+
+    uneven_batch = _load_parquet("airway_20k_uneven_batch.parquet")["batch"].values
+    r_out_df = _load_parquet("airway_20k_uneven_combat_seq.parquet")
+    return counts_20k, uneven_batch, group, r_out_df
+
+
+def test_combat_seq_airway_uneven_fast_vs_r_correlation(airway_20k_uneven_data):
+    """
+    ComBatSeqFast on the 20K airway subset with unequal batch sizes (2+4+2)
+    should correlate strongly with R sva::ComBat_seq (Pearson r > 0.95).
+
+    This test specifically validates:
+    - Batch-size-weighted grand_gamma (would diverge from R with the old simple mean)
+    - CDF shift (y<=1 guard + cdf(y-1) + 1+ppf) matching R's match_quantiles exactly
+    """
+    counts_20k, uneven_batch, group, r_out_df = airway_20k_uneven_data
+    py_result = ComBatSeqFast().fit_transform(counts_20k, uneven_batch, group=group)
+
+    corr = np.corrcoef(
+        py_result.values.ravel().astype(float),
+        r_out_df.values.ravel().astype(float),
+    )[0, 1]
+    assert corr > 0.95, (
+        f"ComBatSeqFast vs R on airway 20K uneven batches: Pearson r={corr:.4f} (expected > 0.95)"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Airway e2e — full 64K genes  (slow — skipped by default)
 # ---------------------------------------------------------------------------
 

@@ -93,7 +93,6 @@ class ComBat:
         n_batch = len(batch_levels)
 
         batch_idx = {lvl: i for i, lvl in enumerate(batch_levels)}
-        batch_int = np.array([batch_idx[b] for b in batch])  # noqa: F841
 
         print(f"Found {n_batch} batches")
 

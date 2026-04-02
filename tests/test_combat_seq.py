@@ -145,6 +145,52 @@ def test_no_nans_in_output():
     assert not result.isnull().any().any()
 
 
+def test_combatseqfast_output_shape_type():
+    """ComBatSeqFast must return a DataFrame of non-negative integers with the same shape."""
+    df, batch, _ = make_count_data()
+    result = ComBatSeqFast().fit_transform(df, batch)
+    assert isinstance(result, pd.DataFrame)
+    assert result.shape == df.shape
+    assert list(result.index) == list(df.index)
+    assert list(result.columns) == list(df.columns)
+    assert (result.values >= 0).all()
+    assert np.issubdtype(result.values.dtype, np.integer)
+
+
+def test_three_batches():
+    """ComBatSeq and ComBatSeqFast must handle more than two batches."""
+    rng = np.random.default_rng(3)
+    n_genes, n_per_batch = 50, 4
+    n_samples = n_per_batch * 3
+    base = rng.uniform(10, 100, size=n_genes)
+    batch_effects = [1.0, 2.0, 0.5]
+    counts = np.hstack([
+        rng.negative_binomial(
+            10, (10 / (10 + base * be))[:, np.newaxis] * np.ones((1, n_per_batch))
+        )
+        for be in batch_effects
+    ])
+    df = pd.DataFrame(counts, index=[f"g{i}" for i in range(n_genes)],
+                      columns=[f"s{i}" for i in range(n_samples)])
+    batch = ["A"] * n_per_batch + ["B"] * n_per_batch + ["C"] * n_per_batch
+
+    for cls in (ComBatSeq, ComBatSeqFast):
+        result = cls().fit_transform(df, batch)
+        assert result.shape == df.shape
+        assert (result.values >= 0).all()
+        assert np.issubdtype(result.values.dtype, np.integer)
+
+
+def test_group_none():
+    """Calling fit_transform with group=None should use an intercept-only design."""
+    df, batch, _ = make_count_data(n_genes=50, seed=5)
+    for cls in (ComBatSeq, ComBatSeqFast):
+        result = cls().fit_transform(df, batch, group=None)
+        assert result.shape == df.shape
+        assert (result.values >= 0).all()
+        assert not pd.DataFrame(result).isnull().any().any()
+
+
 def test_fast_matches_standard():
     """
     ComBatSeqFast and ComBatSeq must agree on batch coefficients (gamma_hat) within 1e-4.

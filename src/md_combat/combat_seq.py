@@ -22,7 +22,6 @@ import statsmodels.api as sm
 from scipy.special import digamma, polygamma
 from scipy.stats import nbinom
 
-
 # ---------------------------------------------------------------------------
 # Base class — Template Method pattern
 # ---------------------------------------------------------------------------
@@ -102,8 +101,7 @@ class _ComBatSeqBase(ABC):
             )
 
         corrected_nz = self._quantile_map(
-            count_mat_nz, batch, batch_levels, gamma_hat, phi_hat,
-            full_design, log_offset, n_batch,
+            count_mat_nz, batch, batch_levels, gamma_hat, phi_hat, log_offset,
         )
 
         corrected = self._reconstruct(corrected_nz, count_mat, zero_gene_idx, keep_gene_idx)
@@ -236,34 +234,45 @@ class _ComBatSeqBase(ABC):
         batch_levels: np.ndarray,
         gamma_hat: np.ndarray,
         phi_hat: np.ndarray,
-        design: np.ndarray,
         log_offset: np.ndarray,
-        n_batch: int,
     ) -> np.ndarray:
         """
         Remove batch effects via quantile mapping on the NB distribution.
 
         For each sample, compute the quantile of the observed count under the
         batch-specific NB, then map that quantile to the batch-free NB.
+
+        Matches R's match_quantiles exactly:
+        - y <= 1: kept unchanged (boundary guard)
+        - y > 1:  q = P(X <= y-1) under batch NB; corrected = 1 + Q(q) under adjusted NB
+        grand_gamma is the batch-size-weighted mean across batches, matching R's
+        weighted.mean(gamma.hat, w=n.batches).
         """
         corrected = count_mat.copy()
-        grand_gamma = gamma_hat.mean(axis=0)  # (n_genes,)
+
+        # Batch-size-weighted grand mean (matches R's weighted.mean(..., w=n.batches))
+        batch_sizes = np.array([np.sum(batch == lvl) for lvl in batch_levels])
+        grand_gamma = (batch_sizes[:, np.newaxis] * gamma_hat).sum(axis=0) / batch_sizes.sum()
+
+        size = np.where(phi_hat > 0, 1.0 / phi_hat, 1e6)  # NB size = 1/phi
 
         for j in range(count_mat.shape[1]):
             b_idx = np.where(batch_levels == batch[j])[0][0]
-            offset_j = log_offset[j]
             log_ratio = grand_gamma - gamma_hat[b_idx, :]
-            size = np.where(phi_hat > 0, 1.0 / phi_hat, 1e6)
 
-            mu_batch = np.exp(offset_j + gamma_hat[b_idx, :])
+            mu_batch = np.exp(log_offset[j] + gamma_hat[b_idx, :])
             mu_adj = mu_batch * np.exp(log_ratio)
 
-            y = count_mat[:, j]
             prob_batch = np.clip(size / (size + mu_batch), 1e-10, 1 - 1e-10)
             prob_adj = np.clip(size / (size + mu_adj), 1e-10, 1 - 1e-10)
 
-            q = np.clip(nbinom.cdf(y, size, prob_batch), 1e-10, 1 - 1e-10)
-            corrected[:, j] = nbinom.ppf(q, size, prob_adj)
+            y = count_mat[:, j]
+            # y <= 1: already preserved by corrected = count_mat.copy()
+            map_mask = y > 1
+            if map_mask.any():
+                q = nbinom.cdf(y[map_mask] - 1, size[map_mask], prob_batch[map_mask])
+                q = np.clip(q, 1e-10, 1 - 1e-10)
+                corrected[map_mask, j] = 1 + nbinom.ppf(q, size[map_mask], prob_adj[map_mask])
 
         return corrected
 

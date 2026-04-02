@@ -239,5 +239,22 @@ def test_single_sample_batch_allowed_with_mean_only():
     assert not result.isnull().any().any()
 
 
+def test_confounded_covariate_raises():
+    """A covariate that perfectly mirrors batch must raise ValueError."""
+    df, batch, _ = make_data()
+    batch_arr = np.array(batch)
+    # mod column = 0 for batch A, 1 for batch B — perfectly confounded with batch
+    mod = (batch_arr == "B").astype(float).reshape(-1, 1)
+    with pytest.raises(ValueError, match="confounded with batch"):
+        combat(df, batch, mod=mod)
+
+
+def test_ref_batch_not_found_raises():
+    """Passing an unknown ref_batch must raise ValueError."""
+    df, batch, _ = make_data()
+    with pytest.raises(ValueError, match="ref_batch"):
+        combat(df, batch, ref_batch="Z")
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

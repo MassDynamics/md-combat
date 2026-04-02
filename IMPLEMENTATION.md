@@ -568,6 +568,11 @@ similar to ComBat but differs in:
 2. How the GLM is fitted (edgeR's `glmFit` in R; per-gene `NegativeBinomial` in Python)
 3. How the quantile mapping is parametrised
 
+Both Python implementations (`ComBatSeq` and `ComBatSeqFast`) share all steps
+described in this section — they differ only in the NB GLM solver (step 3).
+The shared logic lives in `_ComBatSeqBase`; see [Section 4](#4-combatseqfast)
+for the ABC design and the vectorised Newton-Raphson solver.
+
 ### Step 1 — Filter all-zero genes
 
 **R:**
@@ -719,13 +724,22 @@ for (a in 1:nrow(counts_sub)) {
 
 **Python (`_quantile_map`):**
 ```python
-mu_batch   = np.exp(offset_j + gamma_hat[b_idx, :])
+# Batch-size-weighted grand mean (matches R's weighted.mean(..., w=n.batches))
+batch_sizes = np.array([np.sum(batch == lvl) for lvl in batch_levels])
+grand_gamma = (batch_sizes[:, np.newaxis] * gamma_hat).sum(axis=0) / batch_sizes.sum()
+
+mu_batch   = np.exp(log_offset[j] + gamma_hat[b_idx, :])
 mu_adj     = mu_batch * np.exp(grand_gamma - gamma_hat[b_idx, :])
-size       = 1.0 / phi_hat                               # NB size parameter
-prob_batch = size / (size + mu_batch)                    # p in scipy NB
+size       = 1.0 / phi_hat                           # NB size parameter
+prob_batch = size / (size + mu_batch)                # p in scipy NB
 prob_adj   = size / (size + mu_adj)
-q          = nbinom.cdf(y, size, prob_batch)             # P(X <= y)
-corrected[:, j] = nbinom.ppf(q, size, prob_adj)         # Q(p, new)
+
+# y <= 1: kept unchanged (same as R's guard)
+# y > 1:  q = P(X <= y-1), corrected = 1 + Q(q) — identical to R's match_quantiles
+map_mask = y > 1
+q = nbinom.cdf(y[map_mask] - 1, size[map_mask], prob_batch[map_mask])
+q = np.clip(q, 1e-10, 1 - 1e-10)
+corrected[map_mask, j] = 1 + nbinom.ppf(q, size[map_mask], prob_adj[map_mask])
 ```
 
 **NB parametrisation difference:** R's `pnbinom`/`qnbinom` use
@@ -733,12 +747,15 @@ corrected[:, j] = nbinom.ppf(q, size, prob_adj)         # Q(p, new)
 `p = size/(size + mu)` (success probability). These are algebraically
 equivalent: `p = n/(n + mu)`.
 
-**CDF shift:** R uses `pnbinom(x - 1, ...)` (CDF of `x-1`, i.e. `P(X ≤ x-1)`)
-then adds 1 back via `1 + qnbinom(...)`. Python uses `nbinom.cdf(y, ...)` which
-is `P(X ≤ y)`. This is a one-step shift that gives the same mapping for counts
-> 1 but handles the boundary slightly differently for 0s/1s. R explicitly
-protects 0s and 1s; Python's `cdf`/`ppf` chain naturally maps them close to
-their original values given that the clipping keeps `q` away from the boundary.
+**CDF shift:** Python matches R exactly.
+- `y ≤ 1`: kept unchanged (`corrected = count_mat.copy()` preserves these values).
+- `y > 1`: `q = P(X ≤ y-1)` via `nbinom.cdf(y-1, ...)`, then `corrected = 1 + Q(q)`.
+This is a direct translation of R's `pnbinom(x-1, ...) / 1 + qnbinom(...)`.
+
+**Weighted grand_gamma:** Python computes `grand_gamma` as a batch-size-weighted
+average, matching R's `apply(gamma.hat, 2, weighted.mean, w=n.batches)`. For
+equal batch sizes the two are identical; for unequal batches Python's previous
+unweighted mean was incorrect.
 
 **Vectorisation:** R loops over all `(gene, sample)` pairs with nested `for`
 loops. Python vectorises over genes for each sample in the outer loop, using
@@ -957,6 +974,7 @@ For 200 K genes the same matrices fit in ~40 MB.
 | **`bplapply`** (parallel) | Optional BiocParallel | Sequential `for` loop | Simplicity; parallelism is addable |
 | **Dispersion estimation** | edgeR Cox-Reid shrinkage | statsmodels NB-2 per gene | edgeR not available in Python |
 | **NB parametrisation** | `(mu, size=1/phi)` | `(n=1/phi, p=size/(size+mu))` | scipy convention |
-| **CDF in quantile map** | `pnbinom(x-1, ...)` | `nbinom.cdf(y, ...)` | Same distribution; boundary handled differently for 0/1 |
+| **CDF in quantile map** | `pnbinom(x-1, ...)` then `1 + qnbinom(...)` | same: `cdf(y-1)` then `1 + ppf(q)`; `y ≤ 1` kept unchanged | Identical to R |
+| **grand_gamma in quantile map** | `weighted.mean(gamma.hat, w=n.batches)` | `(batch_sizes * gamma_hat).sum() / batch_sizes.sum()` | Identical; matters for unequal batch sizes |
 | **Missing values** | `Beta.NA` fallback | Not fully implemented | NA matrices rare in practice |
 | **Output type** | R matrix | `pd.DataFrame` (preserves index/columns) | Pythonic API |

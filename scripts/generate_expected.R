@@ -20,9 +20,11 @@
 #   simulated_counts.parquet          (200-gene NB input, set.seed(42))
 #   simulated_meta.parquet            (batch / group for simulated data)
 #   simulated_combat_seq.parquet      (R sva::ComBat_seq on simulated data)
-#   airway_20k_gene_ids.parquet       (the 20 000 gene IDs sampled, set.seed(42))
-#   airway_20k_combat_seq.parquet     (R sva::ComBat_seq on the 20K subset)
-#   airway_full_combat_seq.parquet    (R sva::ComBat_seq on all 64K genes — slow)
+#   airway_20k_gene_ids.parquet           (the 20 000 gene IDs sampled, set.seed(42))
+#   airway_20k_combat_seq.parquet         (R sva::ComBat_seq on the 20K subset, equal batches)
+#   airway_20k_uneven_batch.parquet       (batch labels for the 2+4+2 unequal split)
+#   airway_20k_uneven_combat_seq.parquet  (R sva::ComBat_seq on the 20K subset, unequal batches)
+#   airway_full_combat_seq.parquet        (R sva::ComBat_seq on all 64K genes — slow)
 
 library(arrow)
 library(sva)
@@ -97,6 +99,19 @@ write_parquet(
 r_out_20k  <- ComBat_seq(counts_20k, batch = batch_aw, group = group_aw)
 write_parquet(as.data.frame(r_out_20k),        file.path(out_dir, "airway_20k_combat_seq.parquet"))
 message("     ", nrow(r_out_20k), " genes x ", ncol(r_out_20k), " samples  -- done")
+
+# ---------------------------------------------------------------------------
+# 3b. Airway 20K subset — uneven batches (2+4+2) — exercises weighted grand_gamma
+#     Remap: A = N61311 (2), B = N052611 + N061011 (4), C = N080611 (2)
+# ---------------------------------------------------------------------------
+message("3b/4  Airway 20K uneven-batch sva::ComBat_seq ...")
+batch_uneven <- ifelse(batch_aw %in% c("N052611", "N061011"), "B",
+               ifelse(batch_aw == "N61311", "A", "C"))
+r_out_uneven <- ComBat_seq(counts_20k, batch = batch_uneven, group = group_aw)
+write_parquet(data.frame(batch = batch_uneven),  file.path(out_dir, "airway_20k_uneven_batch.parquet"))
+write_parquet(as.data.frame(r_out_uneven),       file.path(out_dir, "airway_20k_uneven_combat_seq.parquet"))
+message("     batches: ", paste(table(batch_uneven), collapse="+"),
+        "  ", nrow(r_out_uneven), " genes x ", ncol(r_out_uneven), " samples  -- done")
 
 # ---------------------------------------------------------------------------
 # 4. Airway full — ComBat_seq  (slow — only used by @pytest.mark.slow tests)
