@@ -58,7 +58,7 @@ moments of the inverse-gamma to the empirical distribution of `delta.hat`.
 |---|---|
 | `m <- mean(gamma.hat)` | `m = np.mean(gamma_hat)` |
 | `s2 <- var(gamma.hat)` | `s2 = np.var(gamma_hat, ddof=1)` |
-| *(no guard — returns `NaN` if `s2 == 0`)* | `if s2 == 0: return 1.0` |
+| *(no guard — returns `NaN` if `s2 == 0`)* | `if s2 == 0: raise ValueError(...)` |
 | `(2 * s2 + m^2) / s2` | `(2 * s2 + m**2) / s2` |
 
 **Note:** R's `var()` uses `ddof=1` by default; Python's `np.var` defaults to
@@ -85,7 +85,7 @@ Computes the scale parameter **β** of the same inverse-gamma hyper-prior.
 |---|---|
 | `m <- mean(gamma.hat)` | `m = np.mean(gamma_hat)` |
 | `s2 <- var(gamma.hat)` | `s2 = np.var(gamma_hat, ddof=1)` |
-| *(no guard)* | `if s2 == 0: return 1.0` |
+| *(no guard)* | `if s2 == 0: raise ValueError(...)` |
 | `(m * s2 + m^3) / s2` | `(m * s2 + m**3) / s2` |
 
 Same guard as `_aprior` — raises `ValueError` if `s2 == 0`.
@@ -586,16 +586,15 @@ rm   <- setdiff(1:nrow(counts), keep)
 
 **Python:**
 ```python
-gene_means  = count_mat.mean(axis=1)
-nonzero_mask = gene_means > 0
-zero_gene_idx = np.where(~nonzero_mask)[0]
-keep_gene_idx = np.where(nonzero_mask)[0]
+keep_mask = np.ones(count_mat.shape[0], dtype=bool)
+for lvl in np.unique(batch):
+    keep_mask &= count_mat[:, batch == lvl].sum(axis=1) > 0
+zero_gene_idx = np.where(~keep_mask)[0]
+keep_gene_idx = np.where(keep_mask)[0]
 ```
 
-**Difference:** R keeps genes that are non-zero in *every* batch (intersection).
-Python keeps genes with a positive overall mean — slightly more permissive for
-genes that are zero in one batch but expressed in others. Both approaches
-exclude genes that are all-zero globally.
+Matches R exactly: a gene is kept only if it has at least one non-zero count
+in every batch.
 
 ---
 
