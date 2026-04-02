@@ -211,7 +211,7 @@ def test_fast_matches_standard():
     count_mat = np.array(df, dtype=float)
     batch_arr = np.asarray(batch)
 
-    count_mat_nz, _, _ = std._filter_zero_genes(count_mat)
+    count_mat_nz, _, _ = std._filter_zero_genes(count_mat, batch_arr)
     # No group covariate — avoids confounded design (group == batch in make_count_data)
     n_batch, X, _ = std._build_design(batch_arr, count_mat.shape[1], None, None)
     offsets = np.log(count_mat_nz.sum(axis=0) + 1)
@@ -222,6 +222,27 @@ def test_fast_matches_standard():
     assert np.allclose(gamma_std, gamma_fast, atol=1e-4), (
         f"gamma_hat max diff: {np.abs(gamma_std - gamma_fast).max():.2e}"
     )
+
+
+def test_filter_zero_genes_excludes_batch_zero_gene():
+    """Gene zero in all samples of any batch must be filtered out (matches R)."""
+    # Gene 0: non-zero in both batches — should be kept
+    # Gene 1: non-zero in batch A but all-zero in batch B — should be filtered
+    # Gene 2: all-zero globally — should be filtered
+    counts = pd.DataFrame(
+        [[10, 12, 0, 0], [8, 9, 0, 0], [0, 0, 0, 0]],
+        columns=["s1", "s2", "s3", "s4"],
+    )
+    counts.iloc[0, 2:] = [5, 6]   # gene 0 is expressed in batch B too
+    batch = np.array(["A", "A", "B", "B"])
+
+    seq = ComBatSeq()
+    count_mat = np.array(counts, dtype=float)
+    _, zero_idx, keep_idx = seq._filter_zero_genes(count_mat, batch)
+
+    assert 0 in keep_idx, "Gene 0 (expressed in both batches) should be kept"
+    assert 1 in zero_idx, "Gene 1 (zero in all batch B samples) should be filtered"
+    assert 2 in zero_idx, "Gene 2 (globally zero) should be filtered"
 
 
 if __name__ == "__main__":

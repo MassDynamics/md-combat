@@ -14,6 +14,7 @@ ComBatSeqFast
     Vectorised implementation: all-gene NB GLM via batched Newton-Raphson.
 """
 
+import logging
 import warnings
 from abc import ABC, abstractmethod
 
@@ -22,6 +23,8 @@ import pandas as pd
 import statsmodels.api as sm
 from scipy.special import digamma, polygamma
 from scipy.stats import nbinom
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Base class — Template Method pattern
@@ -88,7 +91,7 @@ class _ComBatSeqBase(ABC):
         count_mat = np.array(counts, dtype=float)
         batch = np.asarray(batch)
 
-        count_mat_nz, zero_gene_idx, keep_gene_idx = self._filter_zero_genes(count_mat)
+        count_mat_nz, zero_gene_idx, keep_gene_idx = self._filter_zero_genes(count_mat, batch)
         n_batch, full_design, batch_levels = self._build_design(
             batch, count_mat.shape[1], group, covar_mod
         )
@@ -143,12 +146,18 @@ class _ComBatSeqBase(ABC):
     # ------------------------------------------------------------------
 
     def _filter_zero_genes(
-        self, count_mat: np.ndarray
+        self, count_mat: np.ndarray, batch: np.ndarray
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Return non-zero-gene submatrix plus index arrays for reconstruction."""
-        nonzero_mask = count_mat.mean(axis=1) > 0
-        zero_gene_idx = np.where(~nonzero_mask)[0]
-        keep_gene_idx = np.where(nonzero_mask)[0]
+        """Return non-zero-gene submatrix plus index arrays for reconstruction.
+
+        Matches R: keep a gene only if it has at least one non-zero count in
+        every batch.  Genes that are all-zero in any single batch are removed.
+        """
+        keep_mask = np.ones(count_mat.shape[0], dtype=bool)
+        for lvl in np.unique(batch):
+            keep_mask &= count_mat[:, batch == lvl].sum(axis=1) > 0
+        zero_gene_idx = np.where(~keep_mask)[0]
+        keep_gene_idx = np.where(keep_mask)[0]
         count_mat_nz = count_mat[keep_gene_idx, :] if len(zero_gene_idx) > 0 else count_mat
         return count_mat_nz, zero_gene_idx, keep_gene_idx
 
@@ -303,6 +312,7 @@ class ComBatSeq(_ComBatSeqBase):
         n_genes = Y.shape[0]
         phi_hat = np.ones(n_genes)
         gamma_hat = np.zeros((n_batch, n_genes))
+        n_failed = 0
 
         for g in range(n_genes):
             y = Y[g, :]
@@ -316,7 +326,14 @@ class ComBatSeq(_ComBatSeqBase):
                 phi_hat[g] = np.exp(result.params[-1]) if result.params[-1] < 20 else 1e8
                 gamma_hat[:, g] = result.params[:n_batch]
             except Exception:
-                pass
+                n_failed += 1
+
+        if n_failed:
+            logger.warning(
+                "%d / %d genes failed NB-GLM fitting and were left uncorrected",
+                n_failed,
+                n_genes,
+            )
 
         return gamma_hat, phi_hat
 
