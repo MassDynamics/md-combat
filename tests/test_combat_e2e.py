@@ -1,15 +1,15 @@
 """
 End-to-end tests: Python vs R parity for ComBat and ComBat-seq.
 
-Tests compare Python output against pre-computed R golden files stored in
-tests/expected/.  No R installation is required to run these tests.
+Tests compare Python output against pre-computed R benchmark reference outputs
+stored in tests/expected/.  No R installation is required to run these tests.
 
-To regenerate the golden files (requires R + sva + bladderbatch + airway):
+To regenerate the benchmark references (requires R + sva + bladderbatch + airway):
     Rscript scripts/generate_expected.R
 
 WARNING: if scripts/export_datasets.R is re-run (updating the bundled data
 in src/md_combat/data/), run generate_expected.R immediately afterwards or
-the golden files will be out of sync.
+the benchmark references will be out of sync.
 
 ComBat:    asserts near-exact numerical parity (rtol=1e-5) against sva::ComBat,
            using the bladderbatch microarray dataset.
@@ -35,7 +35,7 @@ def _load_parquet(name: str) -> pd.DataFrame:
     path = EXPECTED_DIR / name
     if not path.exists():
         pytest.skip(
-            f"Golden file not found: {path}\n"
+            f"Benchmark reference file not found: {path}\n"
             "Run: Rscript scripts/generate_expected.R"
         )
     return pd.read_parquet(path)
@@ -48,7 +48,7 @@ def _load_parquet(name: str) -> pd.DataFrame:
 
 @pytest.fixture(scope="module")
 def bladder_data():
-    """Load bladderbatch input from the bundled package data and R golden output."""
+    """Load bladderbatch input from the bundled package data and R benchmark reference."""
     expr_df, batch, _ = load_bladderbatch()
     r_result_df = _load_parquet("bladderbatch_combat.parquet")
     return expr_df, batch, r_result_df
@@ -82,7 +82,7 @@ def test_combat_index_columns_preserved(bladder_data):
 
 @pytest.fixture(scope="module")
 def simulated_seq_data():
-    """Load pre-generated simulated NB data and R golden output."""
+    """Load pre-generated simulated NB data and R benchmark reference."""
     counts_df = _load_parquet("simulated_counts.parquet")
     meta = _load_parquet("simulated_meta.parquet")
     r_out_df = _load_parquet("simulated_combat_seq.parquet")
@@ -101,7 +101,7 @@ def test_combat_seq_batch_correction_reduces_difference(simulated_seq_data):
 
 
 def test_combat_seq_r_reduces_difference(simulated_seq_data):
-    """Sanity check: R's ComBat_seq golden output should also reduce batch difference."""
+    """Sanity check: R's ComBat_seq benchmark reference should also reduce batch difference."""
     counts_df, batch, _, r_out_df = simulated_seq_data
     before = abs(counts_df.values[:, batch == 1].mean() - counts_df.values[:, batch == 2].mean())
     r_after = abs(r_out_df.values[:, batch == 1].mean() - r_out_df.values[:, batch == 2].mean())
@@ -165,7 +165,7 @@ def test_combat_seq_fast_vs_standard_on_simulated_data(simulated_seq_data):
 @pytest.fixture(scope="module")
 def airway_20k_data():
     """
-    Load airway input filtered to the 20K gene subset and the R golden output.
+    Load airway input filtered to the 20K gene subset and the R benchmark reference.
 
     Gene IDs are loaded from tests/expected/airway_20k_gene_ids.parquet, which
     was created with set.seed(42) in scripts/generate_expected.R and matches
@@ -230,7 +230,7 @@ def test_combat_seq_airway_20k_fast_vs_standard(airway_20k_data):
 @pytest.fixture(scope="module")
 def airway_20k_uneven_data():
     """
-    Load airway 20K subset with a 2+4+2 unequal batch split and R golden output.
+    Load airway 20K subset with a 2+4+2 unequal batch split and R benchmark reference.
 
     Batch remap: A=N61311 (2 samples), B=N052611+N061011 (4 samples), C=N080611 (2 samples).
     This exercises the batch-size-weighted grand_gamma and CDF shift corrections.
@@ -272,7 +272,7 @@ def test_combat_seq_airway_uneven_fast_vs_r_correlation(airway_20k_uneven_data):
 
 @pytest.fixture(scope="module")
 def airway_full_data():
-    """Load full airway input and the R golden output (all 64K genes)."""
+    """Load full airway input and the R benchmark reference (all 64K genes)."""
     counts_df, batch, group = load_airway()
     r_out_df = _load_parquet("airway_full_combat_seq.parquet")
     return counts_df, batch, group, r_out_df

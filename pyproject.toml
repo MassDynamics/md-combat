@@ -15,7 +15,15 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-cov", "ruff", "pre-commit", "jupyter", "nbconvert"]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "ruff",
+    "pre-commit",
+    "jupyter",
+    "nbconvert",
+    "matplotlib>=3.8",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]

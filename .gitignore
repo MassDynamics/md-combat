@@ -10,3 +10,6 @@ htmlcov/
 .pytest_cache/
 *.rdb
 *.rdx
+
+# Local cache for long notebook outputs (optional parquet saves)
+docs/cache/

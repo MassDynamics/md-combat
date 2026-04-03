@@ -1,0 +1,8 @@
+# Optional: prepend these lines (including ---) to APP_NOTE_PYTHON_R_PARITY.md
+# when publishing with Hugo, Eleventy, MkDocs, etc. The main .md file has no
+# YAML so Cursor and GitHub render a normal scientific-style title.
+---
+title: "Numerical parity of md_combat with Bioconductor sva on microarray and RNA-seq reference data"
+date: 2026-04-03
+description: "We compare the Python package md_combat to frozen R sva outputs on full bladderbatch and full airway datasets, report agreement metrics and wall-clock time, and provide reproducible figures."
+---

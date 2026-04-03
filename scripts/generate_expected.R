@@ -1,13 +1,13 @@
 #!/usr/bin/env Rscript
 #
-# Generate golden expected output files for e2e tests.
+# Generate R benchmark reference outputs (Parquet) for e2e tests.
 #
 # Run once from the repo root:
 #   Rscript scripts/generate_expected.R
 #
 # WARNING: If you re-run scripts/export_datasets.R (which regenerates the
 # bundled dataset parquet files in src/md_combat/data/), you MUST re-run
-# this script immediately afterwards.  Otherwise the golden files will be
+# this script immediately afterwards.  Otherwise the benchmark references will be
 # out of sync with the bundled data and all e2e tests will fail.
 #
 # Requirements:
@@ -121,4 +121,4 @@ r_out_full <- ComBat_seq(counts_aw, batch = batch_aw, group = group_aw)
 write_parquet(as.data.frame(r_out_full), file.path(out_dir, "airway_full_combat_seq.parquet"))
 message("     ", nrow(r_out_full), " genes x ", ncol(r_out_full), " samples  -- done")
 
-message("\nAll golden files written to ", normalizePath(out_dir), "/")
+message("\nAll benchmark reference files written to ", normalizePath(out_dir), "/")
