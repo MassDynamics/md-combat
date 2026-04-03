@@ -13,8 +13,8 @@ the benchmark references will be out of sync.
 
 ComBat:    asserts near-exact numerical parity (rtol=1e-5) against sva::ComBat,
            using the bladderbatch microarray dataset.
-ComBatSeq: asserts Pearson r > 0.95 against sva::ComBat_seq on the 20K-gene
-           airway subset (standard and fast variants).
+ComBatSeq: asserts Pearson r > 0.95 on log1p(corrected counts) against
+           sva::ComBat_seq on the 20K-gene airway subset (standard and fast variants).
 Slow tests (full 64K airway) are marked @pytest.mark.slow and skipped by default.
 """
 
@@ -29,6 +29,11 @@ from md_combat.combat_seq import ComBatSeq, ComBatSeqFast
 from md_combat.datasets import load_airway, load_bladderbatch
 
 EXPECTED_DIR = Path(__file__).parent / "expected"
+
+
+def _log1p_ravel(counts: np.ndarray) -> np.ndarray:
+    """log(1 + x) on corrected counts; stabilises Pearson r at low counts vs raw scale."""
+    return np.log1p(np.asarray(counts, dtype=float).ravel())
 
 
 def _load_parquet(name: str) -> pd.DataFrame:
@@ -119,7 +124,8 @@ def test_combat_seq_output_is_nonneg_integers(simulated_seq_data):
 
 def test_combat_seq_python_vs_r_correlation(simulated_seq_data):
     """
-    Python ComBatSeq output should correlate strongly with R sva::ComBat_seq.
+    Python ComBatSeq output should correlate strongly with R sva::ComBat_seq
+    on log1p(corrected counts).
 
     Exact numerical parity is not expected: R uses edgeR's GLM solver while
     Python uses statsmodels NegativeBinomial.
@@ -128,9 +134,10 @@ def test_combat_seq_python_vs_r_correlation(simulated_seq_data):
     py_result = ComBatSeq().fit_transform(counts_df, batch, group=group)
 
     corr = np.corrcoef(
-        py_result.values.ravel().astype(float), r_out_df.values.ravel().astype(float)
+        _log1p_ravel(py_result.values),
+        _log1p_ravel(r_out_df.values),
     )[0, 1]
-    assert corr > 0.95, f"Python vs R ComBat_seq Pearson correlation too low: r={corr:.4f}"
+    assert corr > 0.95, f"Python vs R ComBat_seq Pearson r (log1p) too low: r={corr:.4f}"
 
 
 def test_combat_seq_fast_vs_standard_on_simulated_data(simulated_seq_data):
@@ -147,14 +154,14 @@ def test_combat_seq_fast_vs_standard_on_simulated_data(simulated_seq_data):
     diff = np.abs(std_result.values - fast_result.values)
     exact_match_pct = (diff == 0).mean() * 100
     corr = np.corrcoef(
-        std_result.values.ravel().astype(float),
-        fast_result.values.ravel().astype(float),
+        _log1p_ravel(std_result.values),
+        _log1p_ravel(fast_result.values),
     )[0, 1]
 
     assert exact_match_pct >= 85, (
         f"Only {exact_match_pct:.1f}% of counts match exactly between ComBatSeq and ComBatSeqFast"
     )
-    assert corr > 0.999, f"Pearson r between ComBatSeq and ComBatSeqFast too low: r={corr:.4f}"
+    assert corr > 0.999, f"Pearson r (log1p) between ComBatSeq and ComBatSeqFast too low: r={corr:.4f}"
 
 
 # ---------------------------------------------------------------------------
@@ -190,11 +197,11 @@ def test_combat_seq_airway_20k_fast_vs_r_correlation(airway_20k_data):
     py_result = ComBatSeqFast().fit_transform(counts_20k, batch, group=group)
 
     corr = np.corrcoef(
-        py_result.values.ravel().astype(float),
-        r_out_df.values.ravel().astype(float),
+        _log1p_ravel(py_result.values),
+        _log1p_ravel(r_out_df.values),
     )[0, 1]
     assert corr > 0.95, (
-        f"ComBatSeqFast vs R on airway 20K: Pearson r={corr:.4f} (expected > 0.95)"
+        f"ComBatSeqFast vs R on airway 20K: Pearson r (log1p)={corr:.4f} (expected > 0.95)"
     )
 
 
@@ -212,12 +219,12 @@ def test_combat_seq_airway_20k_fast_vs_standard(airway_20k_data):
     std_result = ComBatSeq().fit_transform(counts_20k, batch, group=group)
 
     corr = np.corrcoef(
-        fast_result.values.ravel().astype(float),
-        std_result.values.ravel().astype(float),
+        _log1p_ravel(fast_result.values),
+        _log1p_ravel(std_result.values),
     )[0, 1]
 
     assert corr > 0.99, (
-        f"Pearson r on 20K airway between Fast and Standard: r={corr:.4f}"
+        f"Pearson r (log1p) on 20K airway between Fast and Standard: r={corr:.4f}"
     )
 
 
@@ -257,11 +264,11 @@ def test_combat_seq_airway_uneven_fast_vs_r_correlation(airway_20k_uneven_data):
     py_result = ComBatSeqFast().fit_transform(counts_20k, uneven_batch, group=group)
 
     corr = np.corrcoef(
-        py_result.values.ravel().astype(float),
-        r_out_df.values.ravel().astype(float),
+        _log1p_ravel(py_result.values),
+        _log1p_ravel(r_out_df.values),
     )[0, 1]
     assert corr > 0.95, (
-        f"ComBatSeqFast vs R on airway 20K uneven batches: Pearson r={corr:.4f} (expected > 0.95)"
+        f"ComBatSeqFast vs R on airway 20K uneven batches: Pearson r (log1p)={corr:.4f} (expected > 0.95)"
     )
 
 
@@ -288,11 +295,11 @@ def test_combat_seq_airway_full_fast_vs_r_correlation(airway_full_data):
     py_result = ComBatSeqFast().fit_transform(counts_df, batch, group=group)
 
     corr = np.corrcoef(
-        py_result.values.ravel().astype(float),
-        r_out_df.values.ravel().astype(float),
+        _log1p_ravel(py_result.values),
+        _log1p_ravel(r_out_df.values),
     )[0, 1]
     assert corr > 0.95, (
-        f"ComBatSeqFast vs R on full airway: Pearson r={corr:.4f} (expected > 0.95)"
+        f"ComBatSeqFast vs R on full airway: Pearson r (log1p)={corr:.4f} (expected > 0.95)"
     )
 
 
@@ -307,9 +314,9 @@ def test_combat_seq_airway_full_fast_vs_standard(airway_full_data):
     std_result = ComBatSeq().fit_transform(counts_df, batch, group=group)
 
     corr = np.corrcoef(
-        fast_result.values.ravel().astype(float),
-        std_result.values.ravel().astype(float),
+        _log1p_ravel(fast_result.values),
+        _log1p_ravel(std_result.values),
     )[0, 1]
     assert corr > 0.99, (
-        f"Pearson r on full airway between Fast and Standard: r={corr:.4f}"
+        f"Pearson r (log1p) on full airway between Fast and Standard: r={corr:.4f}"
     )

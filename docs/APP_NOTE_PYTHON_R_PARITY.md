@@ -14,11 +14,11 @@
 
 **Background.** Batch effect correction is widely performed with the Bioconductor package *sva* (`ComBat`, `ComBat_seq`). A Python reimplementation, *md_combat*, is useful for Python-native pipelines and services.
 
-**Methods.** We compared *md_combat* to outputs of `sva::ComBat` and `sva::ComBat_seq` on the same bundled datasets used for package testing: the bladderbatch microarray study (22 283 probes × 57 samples) and the airway RNA-seq experiment (64 102 genes × 8 samples). R reference matrices were precomputed with `Rscript scripts/generate_expected.R` and stored as Parquet **benchmark reference** files under `tests/expected/`. Agreement was quantified by the maximum absolute element-wise difference (ComBat) or by Pearson correlation *r* and *R*² = *r*² on all aligned matrix elements after flattening (ComBat-seq). RNA-seq plots subsample up to 120 000 gene × sample pairs for visualization. Wall-clock time was measured for full-airway fits on one workstation.
+**Methods.** We compared *md_combat* to outputs of `sva::ComBat` and `sva::ComBat_seq` on the same bundled datasets used for package testing: the bladderbatch microarray study (22 283 probes × 57 samples) and the airway RNA-seq experiment (64 102 genes × 8 samples). R reference matrices were precomputed with `Rscript scripts/generate_expected.R` and stored as Parquet **benchmark reference** files under `tests/expected/`. Agreement was quantified by the maximum absolute element-wise difference (ComBat) or, for ComBat-seq, by Pearson *r* and *R*² = *r*² on **log(1 + corrected count)** for every aligned matrix element after flattening (the same transform is used for RNA-seq hexbin figures so density is not dominated by zeros and small counts). RNA-seq plots subsample up to 120 000 gene × sample pairs for visualization. Wall-clock time was measured for full-airway fits on one workstation.
 
-**Results.** ComBat: maximum |Python − R| = 6.22 × 10⁻¹⁵, *r* = 1.000000. ComBat-seq on full airway vs R benchmark reference: standard Python implementation *r* = 0.999995 (*R*² = 0.999990); vectorised Newton–Raphson implementation *r* = 0.996520 (*R*² = 0.993053). Standard vs fast Python: *r* = 0.996521. Standard ComBat-seq required 395.6 s (6.59 min); ComBatSeqFast required 1.9 s (~206× faster) on the same hardware.
+**Results.** ComBat: maximum |Python − R| = 6.22 × 10⁻¹⁵, *r* = 1.000000. ComBat-seq on full airway vs R benchmark reference on **log(1 + count)**: standard Python *r* = 0.996706 (*R*² = 0.993423); ComBatSeqFast *r* = 0.996538 (*R*² = 0.993088). Standard vs fast Python on log(1 + count): *r* = 0.999788. Standard ComBat-seq required 395.6 s (6.59 min); ComBatSeqFast required 1.9 s (~206× faster) on the same hardware.
 
-**Conclusion.** *md_combat* reproduces R ComBat at machine precision. ComBat-seq agrees with R at very high correlation on full airway; the fast solver trades a small correlation decrement for large speed gains. Figures and commands below support independent reproduction.
+**Conclusion.** *md_combat* reproduces R ComBat at machine precision. ComBat-seq agrees with R at high correlation on log-transformed corrected counts; the fast solver remains close to the standard path on that scale while offering large speed gains. Figures and commands below support independent reproduction.
 
 **Keywords:** batch effect; ComBat; ComBat-seq; sva; Python; reproducibility
 
@@ -51,7 +51,7 @@ Frozen R outputs were written with `scripts/generate_expected.R` to `tests/expec
 ### 2.4 Statistical summaries
 
 - **ComBat:** *D* = max<sub>*i*,*j*</sub> |*Y*<sup>Py</sup><sub>*ij*</sub> − *Y*<sup>R</sup><sub>*ij*</sub>|; Pearson *r* across all elements.
-- **ComBat-seq:** Pearson *r* and *R*² = *r*² between flattened, aligned vectors of corrected counts (Python vs R, or fast vs standard). Scatter displays use two-dimensional hexagonal binning with a diagonal reference (1:1 line).
+- **ComBat-seq:** Pearson *r* and *R*² = *r*² between flattened, aligned vectors of **log(1 + corrected count)** (Python vs R, or fast vs standard). Hexbin scatter displays use the same log(1 + *x*) values on both axes with a diagonal reference (1:1 line).
 
 ### 2.5 Compute environment (reporting run)
 
@@ -88,35 +88,35 @@ Figures were saved by the same notebook to `docs/figures/parity/` at 300 dpi (
 
 ### 3.2 ComBat-seq (airway, full gene set)
 
-**Table 2.** Pearson correlation and *R*² vs R benchmark reference (64 102 × 8), and wall time.
+**Table 2.** Pearson *r* and *R*² on **log(1 + corrected count)** vs R benchmark reference (64 102 × 8), and wall time.
 
 | Comparison | *r* | *R*² | Wall time (s) |
 |------------|-----|------|----------------|
-| Python ComBatSeq (standard) vs R | 0.999995 | 0.999990 | 395.6 |
-| Python ComBatSeqFast vs R | 0.996520 | 0.993053 | 1.9 |
-| ComBatSeqFast vs ComBatSeq (both Python) | 0.996521 | 0.993054 | — |
+| Python ComBatSeq (standard) vs R | 0.996706 | 0.993423 | 395.6 |
+| Python ComBatSeqFast vs R | 0.996538 | 0.993088 | 1.9 |
+| ComBatSeqFast vs ComBatSeq (both Python) | 0.999788 | 0.999577 | — |
 
 Speedup (standard / fast) ≈ **205.8×** on this run.
 
-**Figure 2.** R vs Python ComBat-seq (standard), full airway.
+**Figure 2.** R vs Python ComBat-seq (standard), full airway; axes are log(1 + corrected count).
 
-![Figure 2. ComBat-seq (standard Python) vs R benchmark reference, full airway.](./figures/parity/combatseq_airway_full_std_vs_r.png)
+![Figure 2. ComBat-seq (standard Python) vs R benchmark reference, full airway (log1p counts).](./figures/parity/combatseq_airway_full_std_vs_r.png)
 
-**Figure 3.** R vs Python ComBatSeqFast, full airway.
+**Figure 3.** R vs Python ComBatSeqFast, full airway; axes are log(1 + corrected count).
 
-![Figure 3. ComBat-seq (ComBatSeqFast) vs R benchmark reference, full airway.](./figures/parity/combatseq_airway_full_fast_vs_r.png)
+![Figure 3. ComBat-seq (ComBatSeqFast) vs R benchmark reference, full airway (log1p counts).](./figures/parity/combatseq_airway_full_fast_vs_r.png)
 
-**Figure 4.** Python standard vs Python fast, full airway.
+**Figure 4.** Python standard vs Python fast, full airway; axes are log(1 + corrected count).
 
-![Figure 4. ComBatSeq vs ComBatSeqFast (full airway).](./figures/parity/combatseq_airway_full_std_vs_fast.png)
+![Figure 4. ComBatSeq vs ComBatSeqFast (full airway, log1p counts).](./figures/parity/combatseq_airway_full_std_vs_fast.png)
 
 * * *
 
 ## 4. Discussion
 
-ComBat is a deterministic linear algebra and empirical-Bayes pipeline in double precision; agreement at ~10⁻¹⁵ is consistent with identical algorithms and floating-point order. ComBat-seq depends on negative binomial GLM fitting: R’s *sva* uses the *edgeR*-related machinery, while Python’s standard path uses *statsmodels* Nelder–Mead per gene. The standard Python implementation reached *r* ≈ 0.999995 vs R on full airway, indicating very close alignment of the corrected count surface. The fast Newton–Raphson implementation is not identical to Nelder–Mead and shows slightly lower *r* vs R but remains high (*r* ≈ 0.997) and matches the standard Python path at the same order (*r* ≈ 0.997). For large gene sets, **ComBatSeqFast** is the practical default; the standard implementation remains useful as a slower reference.
+ComBat is a deterministic linear algebra and empirical-Bayes pipeline in double precision; agreement at ~10⁻¹⁵ is consistent with identical algorithms and floating-point order. ComBat-seq depends on negative binomial GLM fitting: R’s *sva* uses the *edgeR*-related machinery, while Python’s standard path uses *statsmodels* Nelder–Mead per gene. **Pearson *r* on raw corrected counts** is very high for the standard path vs R because the values are near-integers with strong pointwise agreement; **on log(1 + count)** the standard and fast Python paths both correlate with R at a similar level (*r* ≈ 0.997 here), while the two Python implementations agree even more closely with each other (*r* ≈ 0.9998), which matches the interpretation that NM and NR mainly diverge in detail that is compressed on the log scale. For large gene sets, **ComBatSeqFast** is the practical default; the standard implementation remains useful as a slower reference.
 
-Limitations: R benchmark reference files depend on R/Bioconductor versions at generation time; correlation on a subsample for plotting can differ slightly from full-matrix *r* if subsampling is enabled; wall times are single-machine snapshots.
+Limitations: R benchmark reference files depend on R/Bioconductor versions at generation time; hexbin figures subsample points so the *r* shown in the figure title can differ slightly from the full-matrix *r* in Table 2; wall times are single-machine snapshots.
 
 * * *
 
