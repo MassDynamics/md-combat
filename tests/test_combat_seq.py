@@ -19,6 +19,7 @@ from md_combat.combat_seq import ComBatSeq, ComBatSeqFast
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 def make_count_data(n_genes=200, n_samples=12, seed=7):
     """
     Simulate NB count data with a batch effect and a biological group effect.
@@ -55,6 +56,7 @@ def make_count_data(n_genes=200, n_samples=12, seed=7):
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 def test_output_shape_and_type():
     df, batch, _ = make_count_data()
@@ -164,14 +166,17 @@ def test_three_batches():
     n_samples = n_per_batch * 3
     base = rng.uniform(10, 100, size=n_genes)
     batch_effects = [1.0, 2.0, 0.5]
-    counts = np.hstack([
-        rng.negative_binomial(
-            10, (10 / (10 + base * be))[:, np.newaxis] * np.ones((1, n_per_batch))
-        )
-        for be in batch_effects
-    ])
-    df = pd.DataFrame(counts, index=[f"g{i}" for i in range(n_genes)],
-                      columns=[f"s{i}" for i in range(n_samples)])
+    counts = np.hstack(
+        [
+            rng.negative_binomial(
+                10, (10 / (10 + base * be))[:, np.newaxis] * np.ones((1, n_per_batch))
+            )
+            for be in batch_effects
+        ]
+    )
+    df = pd.DataFrame(
+        counts, index=[f"g{i}" for i in range(n_genes)], columns=[f"s{i}" for i in range(n_samples)]
+    )
     batch = ["A"] * n_per_batch + ["B"] * n_per_batch + ["C"] * n_per_batch
 
     for cls in (ComBatSeq, ComBatSeqFast):
@@ -233,7 +238,7 @@ def test_filter_zero_genes_excludes_batch_zero_gene():
         [[10, 12, 0, 0], [8, 9, 0, 0], [0, 0, 0, 0]],
         columns=["s1", "s2", "s3", "s4"],
     )
-    counts.iloc[0, 2:] = [5, 6]   # gene 0 is expressed in batch B too
+    counts.iloc[0, 2:] = [5, 6]  # gene 0 is expressed in batch B too
     batch = np.array(["A", "A", "B", "B"])
 
     seq = ComBatSeq()

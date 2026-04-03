@@ -105,7 +105,12 @@ class _ComBatSeqBase(ABC):
             )
 
         corrected_nz = self._quantile_map(
-            count_mat_nz, batch, batch_levels, gamma_hat, phi_hat, log_offset,
+            count_mat_nz,
+            batch,
+            batch_levels,
+            gamma_hat,
+            phi_hat,
+            log_offset,
         )
 
         corrected = self._reconstruct(corrected_nz, count_mat, zero_gene_idx, keep_gene_idx)
@@ -165,7 +170,7 @@ class _ComBatSeqBase(ABC):
         self,
         batch: np.ndarray,
         n_samples: int,
-        group: np.ndarray | None,
+        group: list | np.ndarray | pd.Series | None,
         covar_mod: np.ndarray | None,
     ) -> tuple[int, np.ndarray, np.ndarray]:
         """Build the full design matrix (batch indicators + covariates)."""
@@ -189,7 +194,8 @@ class _ComBatSeqBase(ABC):
 
         if covar_parts:
             covar_cols = (
-                np.column_stack(covar_parts) if len(covar_parts) > 1
+                np.column_stack(covar_parts)
+                if len(covar_parts) > 1
                 else covar_parts[0].reshape(-1, 1)
             )
             full_design = np.hstack([batch_design, covar_cols])
@@ -320,7 +326,10 @@ class ComBatSeq(_ComBatSeqBase):
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
                     nb_mod = sm.NegativeBinomial(
-                        y, X, loglike_method="nb2", offset=offsets,
+                        y,
+                        X,
+                        loglike_method="nb2",
+                        offset=offsets,
                     )
                     result = nb_mod.fit(disp=False, method="nm", maxiter=500)
                 phi_hat[g] = np.exp(result.params[-1]) if result.params[-1] < 20 else 1e8
@@ -380,18 +389,18 @@ class ComBatSeqFast(_ComBatSeqBase):
         log_phi = np.zeros(n_genes)
 
         for _ in range(self.max_iter):
-            phi = np.exp(log_phi)                              # (n_genes,)
-            eta = offsets[np.newaxis, :] + beta @ X.T         # (n_genes, n_samples)
+            phi = np.exp(log_phi)  # (n_genes,)
+            eta = offsets[np.newaxis, :] + beta @ X.T  # (n_genes, n_samples)
             mu = np.exp(np.clip(eta, -20, 20))
 
             # beta Newton step
             # NB-2 score: X' @ (y - mu) / (1 + phi*mu)  [correct weighted gradient]
             # NB-2 Fisher info: X' @ diag(mu / (1 + phi*mu)) @ X
-            inv_disp = 1.0 + phi[:, np.newaxis] * mu          # (n_genes, n_samples)
-            W = mu / inv_disp                                  # Fisher weight
-            score_b = ((Y - mu) / inv_disp) @ X               # (n_genes, n_params)
+            inv_disp = 1.0 + phi[:, np.newaxis] * mu  # (n_genes, n_samples)
+            W = mu / inv_disp  # Fisher weight
+            score_b = ((Y - mu) / inv_disp) @ X  # (n_genes, n_params)
             # X'WX is positive definite; solve (X'WX) @ delta = score for Newton ascent step
-            H_b = np.einsum("gs,si,sj->gij", W, X, X)        # (n_genes, n_params, n_params)
+            H_b = np.einsum("gs,si,sj->gij", W, X, X)  # (n_genes, n_params, n_params)
             # Small ridge term for numerical stability
             H_b += 1e-6 * np.eye(n_params)[np.newaxis, :, :]
             # np.linalg.solve batched: b must be (..., m, k), so add trailing dim
@@ -399,20 +408,26 @@ class ComBatSeqFast(_ComBatSeqBase):
             beta = beta + delta_b
 
             # log_phi Newton step
-            r = 1.0 / np.maximum(phi, 1e-8)                   # NB size (n_genes,)
+            r = 1.0 / np.maximum(phi, 1e-8)  # NB size (n_genes,)
             r2d = r[:, np.newaxis]
             y_plus_r = Y + r2d
 
-            score_p = (r2d * (
-                digamma(y_plus_r) - digamma(r2d)
-                + np.log(r2d) - np.log(r2d + mu)
-                + 1.0 - y_plus_r / (r2d + mu)
-            )).sum(axis=1)
+            score_p = (
+                r2d
+                * (
+                    digamma(y_plus_r)
+                    - digamma(r2d)
+                    + np.log(r2d)
+                    - np.log(r2d + mu)
+                    + 1.0
+                    - y_plus_r / (r2d + mu)
+                )
+            ).sum(axis=1)
 
-            H_p = (r2d ** 2 * (
-                -polygamma(1, y_plus_r) + polygamma(1, r2d)
-                - 1.0 / r2d + 1.0 / (r2d + mu)
-            )).sum(axis=1)
+            H_p = (
+                r2d**2
+                * (-polygamma(1, y_plus_r) + polygamma(1, r2d) - 1.0 / r2d + 1.0 / (r2d + mu))
+            ).sum(axis=1)
 
             delta_phi = np.clip(-score_p / (H_p - 1e-10), -1.0, 1.0)
             log_phi = log_phi + delta_phi
@@ -421,5 +436,5 @@ class ComBatSeqFast(_ComBatSeqBase):
                 break
 
         phi_hat = np.exp(log_phi)
-        gamma_hat = beta[:, :n_batch].T                        # (n_batch, n_genes)
+        gamma_hat = beta[:, :n_batch].T  # (n_batch, n_genes)
         return gamma_hat, phi_hat

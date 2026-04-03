@@ -19,6 +19,7 @@ dev = [
     "pytest",
     "pytest-cov",
     "ruff",
+    "ty>=0.0.28",  # Python type checker
     "pre-commit",
     "jupyter",
     "nbconvert",
@@ -39,7 +40,7 @@ markers = [
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]

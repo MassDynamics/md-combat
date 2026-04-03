@@ -160,8 +160,7 @@ class ComBat:
         if rank < design.shape[1]:
             if design.shape[1] == n_batch + 1:
                 raise ValueError(
-                    "The covariate is confounded with batch! "
-                    "Remove the covariate and rerun ComBat."
+                    "The covariate is confounded with batch! Remove the covariate and rerun ComBat."
                 )
             if design.shape[1] > n_batch + 1:
                 covar_only = design[:, n_batch:]
@@ -310,9 +309,9 @@ class ComBat:
 
         for i, lvl in enumerate(batch_levels):
             mask = batch == lvl
-            bayes_data[:, mask] = (
-                bayes_data[:, mask] - gamma_star[i, :][:, np.newaxis]
-            ) / np.sqrt(delta_star[i, :])[:, np.newaxis]
+            bayes_data[:, mask] = (bayes_data[:, mask] - gamma_star[i, :][:, np.newaxis]) / np.sqrt(
+                delta_star[i, :]
+            )[:, np.newaxis]
 
         bayes_data = bayes_data * sd + stand_mean
 
@@ -341,6 +340,6 @@ def combat(
 
     See ComBat.fit_transform() for full documentation.
     """
-    return ComBat(
-        par_prior=par_prior, mean_only=mean_only, ref_batch=ref_batch
-    ).fit_transform(dat, batch, mod)
+    return ComBat(par_prior=par_prior, mean_only=mean_only, ref_batch=ref_batch).fit_transform(
+        dat, batch, mod
+    )

@@ -8,6 +8,9 @@ Python translation of R's `sva::ComBat` and `sva::ComBat_seq` for batch effect c
 # Set up Python env
 uv sync --extra dev
 
+# Git hooks — run ruff, ty, nbstripout, etc. before every commit (once per clone)
+uv run pre-commit install
+
 # Unit tests (no R needed)
 uv run pytest tests/test_combat.py tests/test_combat_seq.py -v
 
@@ -23,6 +26,9 @@ uv run pytest -v
 
 # Lint
 uv run ruff check src/ tests/
+
+# Type check
+uv run ty check src/ tests/
 
 # Format
 uv run ruff format src/ tests/

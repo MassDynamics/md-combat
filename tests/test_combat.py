@@ -26,6 +26,7 @@ from md_combat.combat import combat
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 def make_data(n_features=50, n_samples=12, seed=42):
     """
     Simulate data with a known batch effect and a biological group effect.
@@ -52,6 +53,7 @@ def make_data(n_features=50, n_samples=12, seed=42):
 # ---------------------------------------------------------------------------
 # Helper function tests
 # ---------------------------------------------------------------------------
+
 
 def test_aprior_bprior_positive():
     gamma = np.array([0.1, 0.3, -0.1, 0.2, 0.0, 0.4])
@@ -96,6 +98,7 @@ def test_it_sol_converges():
 # Main ComBat tests
 # ---------------------------------------------------------------------------
 
+
 def test_output_shape_and_type():
     df, batch, _ = make_data()
     result = combat(df, batch)
@@ -130,9 +133,7 @@ def test_reference_batch_unchanged():
     result = combat(df, batch, ref_batch="A")
     batch_arr = np.array(batch)
     ref_cols = df.columns[batch_arr == "A"]
-    np.testing.assert_array_almost_equal(
-        df[ref_cols].values, result[ref_cols].values, decimal=10
-    )
+    np.testing.assert_array_almost_equal(df[ref_cols].values, result[ref_cols].values, decimal=10)
 
 
 def test_mean_only_preserves_within_batch_variance():
@@ -146,7 +147,9 @@ def test_mean_only_preserves_within_batch_variance():
         var_before = np.var(df.values[:, mask], axis=1)
         var_after = np.var(result.values[:, mask], axis=1)
         np.testing.assert_allclose(
-            var_before, var_after, rtol=1e-6,
+            var_before,
+            var_after,
+            rtol=1e-6,
             err_msg=f"Within-batch variance changed in batch {lvl}",
         )
 
@@ -225,7 +228,7 @@ def test_three_batches():
 def test_single_sample_batch_raises():
     """Single-sample batch must raise — user must pass mean_only=True explicitly."""
     df, _, _ = make_data(n_features=10, n_samples=7)
-    batch = ["A"] * 6 + ["B"]   # batch B has 1 sample
+    batch = ["A"] * 6 + ["B"]  # batch B has 1 sample
     with pytest.raises(ValueError, match="mean_only=True"):
         combat(df, batch)
 

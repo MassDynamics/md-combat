@@ -40,8 +40,7 @@ def _load_parquet(name: str) -> pd.DataFrame:
     path = EXPECTED_DIR / name
     if not path.exists():
         pytest.skip(
-            f"Benchmark reference file not found: {path}\n"
-            "Run: Rscript scripts/generate_expected.R"
+            f"Benchmark reference file not found: {path}\nRun: Rscript scripts/generate_expected.R"
         )
     return pd.read_parquet(path)
 
@@ -161,7 +160,9 @@ def test_combat_seq_fast_vs_standard_on_simulated_data(simulated_seq_data):
     assert exact_match_pct >= 85, (
         f"Only {exact_match_pct:.1f}% of counts match exactly between ComBatSeq and ComBatSeqFast"
     )
-    assert corr > 0.999, f"Pearson r (log1p) between ComBatSeq and ComBatSeqFast too low: r={corr:.4f}"
+    assert corr > 0.999, (
+        f"Pearson r (log1p) between ComBatSeq and ComBatSeqFast too low: r={corr:.4f}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -223,9 +224,7 @@ def test_combat_seq_airway_20k_fast_vs_standard(airway_20k_data):
         _log1p_ravel(std_result.values),
     )[0, 1]
 
-    assert corr > 0.99, (
-        f"Pearson r (log1p) on 20K airway between Fast and Standard: r={corr:.4f}"
-    )
+    assert corr > 0.99, f"Pearson r (log1p) on 20K airway between Fast and Standard: r={corr:.4f}"
 
 
 # ---------------------------------------------------------------------------
@@ -268,7 +267,8 @@ def test_combat_seq_airway_uneven_fast_vs_r_correlation(airway_20k_uneven_data):
         _log1p_ravel(r_out_df.values),
     )[0, 1]
     assert corr > 0.95, (
-        f"ComBatSeqFast vs R on airway 20K uneven batches: Pearson r (log1p)={corr:.4f} (expected > 0.95)"
+        "ComBatSeqFast vs R on airway 20K uneven batches: "
+        f"Pearson r (log1p)={corr:.4f} (expected > 0.95)"
     )
 
 
@@ -317,6 +317,4 @@ def test_combat_seq_airway_full_fast_vs_standard(airway_full_data):
         _log1p_ravel(fast_result.values),
         _log1p_ravel(std_result.values),
     )[0, 1]
-    assert corr > 0.99, (
-        f"Pearson r (log1p) on full airway between Fast and Standard: r={corr:.4f}"
-    )
+    assert corr > 0.99, f"Pearson r (log1p) on full airway between Fast and Standard: r={corr:.4f}"
