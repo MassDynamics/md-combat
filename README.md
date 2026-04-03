@@ -35,7 +35,7 @@ cd md_combat
 uv sync
 ```
 
-Requirements: Python ≥ 3.13, numpy, pandas, scipy, statsmodels.
+Requirements: Python ≥ 3.11, numpy, pandas, scipy, statsmodels.
 
 ---
 

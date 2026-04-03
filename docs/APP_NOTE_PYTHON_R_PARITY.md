@@ -35,7 +35,7 @@ Unwanted batch variation confounds high-throughput genomics. Johnson *et al.* in
 ### 2.1 Software
 
 - **R reference:** *sva* `ComBat` / `ComBat_seq`, as executed when generating benchmark reference outputs. The parity notebook reported **R version 4.5.3 (2026-03-11)** on the machine used for the run summarized here.
-- **Python:** *md_combat* (repository version under test), Python 3.13, NumPy, pandas, SciPy, statsmodels; ComBat-seq **standard** path uses per-gene `statsmodels` negative binomial GLM with Nelder–Mead; **fast** path uses a batched Newton–Raphson solver (see `IMPLEMENTATION.md`).
+- **Python:** *md_combat* (repository version under test), Python 3.11+, NumPy, pandas, SciPy, statsmodels; ComBat-seq **standard** path uses per-gene `statsmodels` negative binomial GLM with Nelder–Mead; **fast** path uses a batched Newton–Raphson solver (see `IMPLEMENTATION.md`).
 
 ### 2.2 Datasets
 
