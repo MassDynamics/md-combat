@@ -7,7 +7,7 @@ set -e
 version=$(grep -m1 'version =' pyproject.toml | sed -E 's/version = "([^"]+)"/\1/')
 tag=${version}-${BUILD_NUMBER}
 
-repo_url="https://github.com/MassDynamics/md-combat.git"
+repo_url="https://$GH_TOKEN@github.com/MassDynamics/md-combat.git"
 git_tag="v${tag}"
 echo "Git tag ${git_tag}"
 git tag "${git_tag}"
