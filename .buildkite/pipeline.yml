@@ -3,4 +3,9 @@ steps:
     key: tag_package
     env:
       BUILD_NUMBER: "${BUILDKITE_BUILD_NUMBER}"
+      GIT_HASH: "${BUILDKITE_COMMIT}"
     command: scripts/tag
+    agents:
+      ebdeploy: true
+    concurrency: 1
+    concurrency_group: "md-combat/tag"
