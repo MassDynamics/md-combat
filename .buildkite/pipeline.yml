@@ -1,0 +1,4 @@
+steps:
+  - label: ":github: tag"
+    key: tag_package
+    command: scripts/tag

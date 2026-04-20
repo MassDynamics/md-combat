@@ -1,0 +1,8 @@
+#!/bin/bash
+
+set -e
+
+uv sync --extra dev
+uv run pytest tests/test_combat.py tests/test_combat_seq.py -v
+uv run pytest tests/test_combat_e2e.py -v
+uv run pytest -v
