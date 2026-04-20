@@ -1,4 +1,6 @@
 steps:
   - label: ":github: tag"
     key: tag_package
+    env:
+      BUILD_NUMBER: "${BUILDKITE_BUILD_NUMBER}"
     command: scripts/tag
