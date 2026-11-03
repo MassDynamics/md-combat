@@ -196,6 +196,51 @@ def test_group_none():
         assert not pd.DataFrame(result).isnull().any().any()
 
 
+def make_covariate_data(n_genes=100, seed=11):
+    """Two batches of 6; a 3-level group balanced across batches (gives a 2-column covar_mod)."""
+    df, batch, _ = make_count_data(n_genes=n_genes, seed=seed)
+    group = np.array(["g0", "g1", "g2"] * 4)
+    covar = np.column_stack([(group == "g1"), (group == "g2")]).astype(float)
+    return df, batch, group, covar
+
+
+@pytest.mark.parametrize("cls", [ComBatSeq, ComBatSeqFast])
+def test_multi_column_covar_mod(cls):
+    """A covar_mod with more than one column must not be flattened (regression)."""
+    df, batch, _, covar = make_covariate_data()
+    result = cls().fit_transform(df, batch, covar_mod=covar)
+    assert result.shape == df.shape
+    assert (result.values >= 0).all()
+
+
+@pytest.mark.parametrize("cls", [ComBatSeq, ComBatSeqFast])
+def test_build_design_multi_column_covar_mod(cls):
+    df, batch, _, covar = make_covariate_data()
+    n_batch, design, _ = cls()._build_design(np.asarray(batch), df.shape[1], None, covar)
+    assert design.shape == (12, n_batch + 2)
+    np.testing.assert_array_equal(design[:, n_batch:], covar)
+
+
+@pytest.mark.parametrize("cls", [ComBatSeq, ComBatSeqFast])
+def test_multi_column_covar_mod_equals_group(cls):
+    """Dummy-coding a 3-level group by hand in covar_mod gives the same design as passing group."""
+    df, batch, group, covar = make_covariate_data()
+    batch = np.asarray(batch)
+    _, design_group, _ = cls()._build_design(batch, df.shape[1], group, None)
+    _, design_covar, _ = cls()._build_design(batch, df.shape[1], None, covar)
+    np.testing.assert_array_equal(design_group, design_covar)
+
+
+@pytest.mark.parametrize("cls", [ComBatSeq, ComBatSeqFast])
+def test_covar_mod_vector_and_group_combined(cls):
+    """A 1-D covar_mod is one column, and it is appended after the group columns."""
+    df, batch, group, _ = make_covariate_data()
+    age = np.linspace(20, 60, 12)
+    n_batch, design, _ = cls()._build_design(np.asarray(batch), df.shape[1], group, age)
+    assert design.shape == (12, n_batch + 3)
+    np.testing.assert_array_equal(design[:, -1], age)
+
+
 def test_fast_matches_standard():
     """
     ComBatSeqFast and ComBatSeq must agree on batch coefficients (gamma_hat) within 1e-4.

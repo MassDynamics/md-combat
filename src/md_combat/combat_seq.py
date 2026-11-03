@@ -190,15 +190,12 @@ class _ComBatSeqBase(ABC):
                     covar_parts.append((group == lvl).astype(float))
 
         if covar_mod is not None:
-            covar_parts.append(np.asarray(covar_mod, dtype=float))
+            # accept a 1-D vector (one covariate) or a (n_samples, n_covariates) matrix
+            covar_parts.append(np.asarray(covar_mod, dtype=float).reshape(n_samples, -1))
 
         if covar_parts:
-            covar_cols = (
-                np.column_stack(covar_parts)
-                if len(covar_parts) > 1
-                else covar_parts[0].reshape(-1, 1)
-            )
-            full_design = np.hstack([batch_design, covar_cols])
+            # column_stack turns 1-D group indicators into columns and keeps 2-D blocks as they are
+            full_design = np.hstack([batch_design, np.column_stack(covar_parts)])
         else:
             full_design = batch_design
 

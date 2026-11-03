@@ -140,7 +140,6 @@ corrected = ComBatSeq().fit_transform(counts, batch, group=group)
 ```python
 import numpy as np
 
-covar = np.array([[1, 0], [0, 1], ...])   # (n_samples, n_covariates)
 covar = np.column_stack([
     (group == "trt").astype(float),                          # treatment as 0/1
     np.random.default_rng(0).normal(size=counts.shape[1]),   # e.g. a continuous covariate
