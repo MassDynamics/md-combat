@@ -45,13 +45,15 @@ Requirements: Python ≥ 3.11, numpy, pandas, scipy, statsmodels.
 
 ```python
 import pandas as pd
-from md_combat import ComBat
+from md_combat import ComBat, load_bladderbatch
 
 # dat:   DataFrame of shape (n_features, n_samples)
 #        rows = genes/probes, columns = samples
 #        should be log-transformed and normalised before calling
 # batch: list or array of length n_samples, one label per sample
 
+dat, batch, cancer = load_bladderbatch()
+batch = [f"batch{int(b)}" for b in batch]  # 1.0, 2.0, ... -> "batch1", "batch2", ...
 corrected = ComBat().fit_transform(dat, batch)
 ```
 
@@ -62,9 +64,8 @@ building the correction model):
 import numpy as np
 
 # mod: (n_samples, n_covariates) design matrix — do NOT include an intercept
-group = [0, 0, 1, 1, 0, 0, 1, 1]           # e.g. treatment vs control
+group = np.random.default_rng(0).integers(0, 2, size=dat.shape[1])  # random 0/1 per sample, e.g. treatment vs control
 mod   = np.array(group).reshape(-1, 1).astype(float)
-
 corrected = ComBat().fit_transform(dat, batch, mod=mod)
 ```
 
@@ -117,18 +118,20 @@ model.b_prior_      # (n_batch,)             — inverse-gamma scale prior
 ### ComBatSeq (RNA-seq raw counts)
 
 ```python
-from md_combat import ComBatSeq
+from md_combat import ComBatSeq, load_airway
 
 # counts: DataFrame of shape (n_genes, n_samples), non-negative integers
 # batch:  list or array of batch labels
+# group:  biological condition per sample (airway: dexamethasone "trt" / "untrt")
 
+counts, batch, group = load_airway()
 corrected = ComBatSeq().fit_transform(counts, batch)
 ```
 
 **With a biological group** (recommended for balanced designs):
 
 ```python
-group     = [0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1]   # balanced across batches
+# each cell line (batch) has one treated and one untreated sample
 corrected = ComBatSeq().fit_transform(counts, batch, group=group)
 ```
 
@@ -138,6 +141,10 @@ corrected = ComBatSeq().fit_transform(counts, batch, group=group)
 import numpy as np
 
 covar = np.array([[1, 0], [0, 1], ...])   # (n_samples, n_covariates)
+covar = np.column_stack([
+    (group == "trt").astype(float),                          # treatment as 0/1
+    np.random.default_rng(0).normal(size=counts.shape[1]),   # e.g. a continuous covariate
+])
 corrected = ComBatSeq().fit_transform(counts, batch, covar_mod=covar)
 ```
 
