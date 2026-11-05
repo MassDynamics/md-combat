@@ -1,8 +1,14 @@
 #!/bin/bash
+# Run unit + e2e tests (slow full-airway tests skipped). In CI, create a fresh venv and
+# install test deps via pip. Locally, prefer `uv run pytest -m "not slow"`.
 
 set -e
 
-uv sync --extra dev
-uv run pytest tests/test_combat.py tests/test_combat_seq.py -v
-uv run pytest tests/test_combat_e2e.py -v
-uv run pytest -v
+if [ "$CI" = "true" ]; then
+  python3 -m venv venv
+  source venv/bin/activate
+  pip install --upgrade pip
+  pip install ".[test]"
+fi
+
+pytest -m "not slow" -v tests/

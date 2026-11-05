@@ -1,4 +1,5 @@
 .venv/
+venv/
 .claude-r-env
 __pycache__/
 *.py[cod]

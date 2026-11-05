@@ -1,4 +1,30 @@
 steps:
+  ################################################################################
+  ## Lint & test
+  ################################################################################
+  - label: ":lint-roller: lint"
+    key: lint
+    command: scripts/lint
+    env:
+      CI: "true"
+    agents:
+      python: true
+
+  - label: ":python: test"
+    key: test
+    if: build.message !~ /[@]fast/
+    command: scripts/test
+    env:
+      CI: "true"
+    agents:
+      python: true
+
+  - wait: ~
+    key: pre_tag
+
+  ################################################################################
+  ## Tag
+  ################################################################################
   - label: ":github: tag"
     key: tag_package
     env:

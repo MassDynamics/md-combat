@@ -1,0 +1,16 @@
+#!/bin/bash
+# Run lint + type-check. In CI, create a fresh venv and install dev deps via pip.
+# Locally, prefer `uv run ruff check src tests` etc.
+
+set -e
+
+if [ "$CI" = "true" ]; then
+  python3 -m venv venv
+  source venv/bin/activate
+  pip install --upgrade pip
+  pip install ".[dev]"
+fi
+
+ruff check src tests
+ruff format --check src tests
+ty check src tests
