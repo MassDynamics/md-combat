@@ -26,6 +26,64 @@ from scipy.stats import nbinom
 
 logger = logging.getLogger(__name__)
 
+
+# ---------------------------------------------------------------------------
+# Input checks (mirror sva::ComBat_seq and md_combat.ComBat)
+# ---------------------------------------------------------------------------
+
+
+def _validate_batch_sizes(batch: np.ndarray) -> None:
+    """Raise if any batch has a single sample, as R's ComBat_seq does."""
+    levels, sizes = np.unique(batch, return_counts=True)
+    single = levels[sizes <= 1]
+    if len(single) > 0:
+        raise ValueError(
+            f"Batch(es) {single.tolist()} contain only one sample. "
+            "ComBat-Seq cannot estimate a batch's dispersion from a single sample. "
+            "Merge or remove single-sample batches."
+        )
+
+
+def _check_design_confounding(design: np.ndarray, n_batch: int) -> None:
+    """Raise if the design (batch indicators first, then covariates) is rank-deficient.
+
+    Same three cases and wording as R's ComBat_seq and md_combat.ComBat. Without this,
+    the small ridge term in the NB fit lets a confounded design run silently.
+    """
+    if np.linalg.matrix_rank(design) == design.shape[1]:
+        return
+    if design.shape[1] == n_batch + 1:
+        raise ValueError(
+            "The covariate is confounded with batch! Remove the covariate and rerun ComBat-Seq."
+        )
+    covar_only = design[:, n_batch:]
+    if np.linalg.matrix_rank(covar_only) < covar_only.shape[1]:
+        raise ValueError(
+            "The covariates are confounded with each other! Please remove one or more covariates."
+        )
+    raise ValueError(
+        "At least one covariate is confounded with batch! "
+        "Please remove confounded covariates and rerun ComBat-Seq."
+    )
+
+
+def _log_unadjusted_genes(count_mat: np.ndarray, zero_gene_idx: np.ndarray) -> None:
+    """Warn about genes returned unadjusted because they are all-zero in some batch."""
+    if len(zero_gene_idx) == 0:
+        return
+    n_partial = int((count_mat[zero_gene_idx].sum(axis=1) > 0).sum())
+    logger.info(
+        f"{len(zero_gene_idx)} gene(s) are all-zero in at least one batch "
+        "and are returned unadjusted."
+    )
+    if n_partial > 0:
+        logger.warning(
+            f"{n_partial} gene(s) are all-zero in at least one batch but have counts in another; "
+            "they are returned with their original counts, not batch-adjusted. "
+            "Filter low-expressed genes before ComBat-Seq to avoid this."
+        )
+
+
 # ---------------------------------------------------------------------------
 # Base class — Template Method pattern
 # ---------------------------------------------------------------------------
@@ -90,11 +148,14 @@ class _ComBatSeqBase(ABC):
         """
         count_mat = np.array(counts, dtype=float)
         batch = np.asarray(batch)
+        _validate_batch_sizes(batch)
 
         count_mat_nz, zero_gene_idx, keep_gene_idx = self._filter_zero_genes(count_mat, batch)
+        _log_unadjusted_genes(count_mat, zero_gene_idx)
         n_batch, full_design, batch_levels = self._build_design(
             batch, count_mat.shape[1], group, covar_mod
         )
+        _check_design_confounding(full_design, n_batch)
         log_offset = np.log(count_mat_nz.sum(axis=0) + 1)
 
         gamma_hat, phi_hat = self._fit_nb_glm(count_mat_nz, full_design, log_offset, n_batch)
@@ -191,7 +252,11 @@ class _ComBatSeqBase(ABC):
 
         if covar_mod is not None:
             # accept a 1-D vector (one covariate) or a (n_samples, n_covariates) matrix
-            covar_parts.append(np.asarray(covar_mod, dtype=float).reshape(n_samples, -1))
+            covar = np.asarray(covar_mod, dtype=float).reshape(n_samples, -1)
+            # drop intercept-like (all-ones) columns, as R does; the batch indicators span them
+            covar = covar[:, ~np.all(covar == 1, axis=0)]
+            if covar.shape[1] > 0:
+                covar_parts.append(covar)
 
         if covar_parts:
             # column_stack turns 1-D group indicators into columns and keeps 2-D blocks as they are
@@ -208,9 +273,14 @@ class _ComBatSeqBase(ABC):
         zero_gene_idx: np.ndarray,
         keep_gene_idx: np.ndarray,
     ) -> np.ndarray:
-        """Restore all-zero genes back to full gene dimension."""
+        """Put the genes left out of the fit back, with their original counts.
+
+        Matches R: ``adjust_counts_whole[rm, ] <- countsOri[rm, ]``. A gene left out
+        is all-zero in at least one batch, but it may have counts in other batches,
+        so it must not be filled with zeros.
+        """
         if len(zero_gene_idx) > 0:
-            corrected = np.zeros_like(count_mat, dtype=float)
+            corrected = count_mat.astype(float, copy=True)
             corrected[keep_gene_idx, :] = corrected_nz
             return corrected
         return corrected_nz

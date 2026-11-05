@@ -16,7 +16,7 @@
 
 **Methods.** We compared *md_combat* to outputs of `sva::ComBat` and `sva::ComBat_seq` on the same bundled datasets used for package testing: the bladderbatch microarray study (22 283 probes × 57 samples) and the airway RNA-seq experiment (64 102 genes × 8 samples). R reference matrices were precomputed with `Rscript scripts/generate_expected.R` and stored as Parquet **benchmark reference** files under `tests/expected/`. Agreement was quantified by the maximum absolute element-wise difference (ComBat) or, for ComBat-seq, by Pearson *r* and *R*² = *r*² on **log(1 + corrected count)** for every aligned matrix element after flattening (the same transform is used for RNA-seq hexbin figures so density is not dominated by zeros and small counts). RNA-seq plots subsample up to 120 000 gene × sample pairs for visualization. Wall-clock time was measured for full-airway fits on one workstation.
 
-**Results.** ComBat: maximum |Python − R| = 6.22 × 10⁻¹⁵, *r* = 1.000000. ComBat-seq on full airway vs R benchmark reference on **log(1 + count)**: standard Python *r* = 0.996706 (*R*² = 0.993423); ComBatSeqFast *r* = 0.996538 (*R*² = 0.993088). Standard vs fast Python on log(1 + count): *r* = 0.999788. Standard ComBat-seq required 395.6 s (6.59 min); ComBatSeqFast required 1.9 s (~206× faster) on the same hardware.
+**Results.** ComBat: maximum |Python − R| = 6.22 × 10⁻¹⁵, *r* = 1.000000. ComBat-seq on full airway vs R benchmark reference on **log(1 + count)**: standard Python *r* = 0.999943 (*R*² = 0.999886); ComBatSeqFast *r* = 0.999773 (*R*² = 0.999546); both recomputed 2026-11-05 after a fix, see §3.2. Standard vs fast Python on log(1 + count): *r* = 0.999786. Standard ComBat-seq required 401.9 s (6.70 min); ComBatSeqFast required 1.8 s (~224× faster) on the same hardware.
 
 **Conclusion.** *md_combat* reproduces R ComBat at machine precision. ComBat-seq agrees with R at high correlation on log-transformed corrected counts; the fast solver remains close to the standard path on that scale while offering large speed gains. Figures and commands below support independent reproduction.
 
@@ -92,11 +92,16 @@ Figures were saved by the same notebook to `docs/figures/parity/` at 300 dpi (
 
 | Comparison | *r* | *R*² | Wall time (s) |
 |------------|-----|------|----------------|
-| Python ComBatSeq (standard) vs R | 0.996706 | 0.993423 | 395.6 |
-| Python ComBatSeqFast vs R | 0.996538 | 0.993088 | 1.9 |
-| ComBatSeqFast vs ComBatSeq (both Python) | 0.999788 | 0.999577 | — |
+| Python ComBatSeq (standard) vs R | 0.999943 | 0.999886 | 401.9 |
+| Python ComBatSeqFast vs R | 0.999773 | 0.999546 | 1.8 |
+| ComBatSeqFast vs ComBatSeq (both Python) | 0.999786 | 0.999571 | — |
 
-Speedup (standard / fast) ≈ **205.8×** on this run.
+Speedup (standard / fast) ≈ **224.2×** on this run.
+
+**Correction (2026-11-05).** The values first published in this table were lowered by a bug: genes all-zero in
+some batch (10,781 here) came back as all zeros instead of their original counts, zeroing 23,884 counts. The
+whole table and Figures 2–4 were regenerated with `examples/combat_comparison.ipynb` after the fix. Before it,
+standard vs R was *r* = 0.996706 and fast vs R was *r* = 0.996538.
 
 **Figure 2.** R vs Python ComBat-seq (standard), full airway; axes are log(1 + corrected count).
 
@@ -114,7 +119,7 @@ Speedup (standard / fast) ≈ **205.8×** on this run.
 
 ## 4. Discussion
 
-ComBat is a deterministic linear algebra and empirical-Bayes pipeline in double precision; agreement at ~10⁻¹⁵ is consistent with identical algorithms and floating-point order. ComBat-seq depends on negative binomial GLM fitting: R’s *sva* uses the *edgeR*-related machinery, while Python’s standard path uses *statsmodels* Nelder–Mead per gene. **Pearson *r* on raw corrected counts** is very high for the standard path vs R because the values are near-integers with strong pointwise agreement; **on log(1 + count)** the standard and fast Python paths both correlate with R at a similar level (*r* ≈ 0.997 here), while the two Python implementations agree even more closely with each other (*r* ≈ 0.9998), which matches the interpretation that NM and NR mainly diverge in detail that is compressed on the log scale. For large gene sets, **ComBatSeqFast** is the practical default; the standard implementation remains useful as a slower reference.
+ComBat is a deterministic linear algebra and empirical-Bayes pipeline in double precision; agreement at ~10⁻¹⁵ is consistent with identical algorithms and floating-point order. This holds for full ComBat; in `mean_only` mode md_combat deliberately differs from *sva* (it shrinks batch means using the batch size rather than *n* = 1; see the README, "Known differences from `sva::ComBat`"). ComBat-seq depends on negative binomial GLM fitting: R’s *sva* uses the *edgeR*-related machinery, while Python’s standard path uses *statsmodels* Nelder–Mead per gene. **Pearson *r* on raw corrected counts** is very high for the standard path vs R because the values are near-integers with strong pointwise agreement; **on log(1 + count)** the standard and fast Python paths both correlate closely with R (*r* = 0.99994 standard, 0.99977 fast) and with each other (*r* ≈ 0.9998); the standard Nelder–Mead path is the closer of the two to R. For large gene sets, **ComBatSeqFast** is the practical default; the standard implementation remains useful as a slower reference.
 
 Limitations: R benchmark reference files depend on R/Bioconductor versions at generation time; hexbin figures subsample points so the *r* shown in the figure title can differ slightly from the full-matrix *r* in Table 2; wall times are single-machine snapshots.
 

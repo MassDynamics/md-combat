@@ -272,6 +272,31 @@ def test_combat_seq_airway_uneven_fast_vs_r_correlation(airway_20k_uneven_data):
     )
 
 
+def _batch_zero_rows(counts: np.ndarray, batch: np.ndarray) -> np.ndarray:
+    """Rows that are all-zero in at least one batch (left out of the fit by R and Python)."""
+    zero_in_batch = [counts[:, batch == b].sum(axis=1) == 0 for b in np.unique(batch)]
+    return np.asarray(np.column_stack(zero_in_batch).any(axis=1))
+
+
+@pytest.mark.parametrize("fixture", ["airway_20k_data", "airway_20k_uneven_data"])
+def test_combat_seq_airway_unfitted_genes_match_r_exactly(fixture, request):
+    """Genes all-zero in some batch come back with their original counts, exactly as in R.
+
+    Regression: they used to come back as all zeros, which the correlation tests above
+    did not catch.
+    """
+    counts, batch, group, r_out_df = request.getfixturevalue(fixture)
+    batch = np.asarray(batch)
+    rows = _batch_zero_rows(counts.values, batch)
+    partial = rows & (counts.values.sum(axis=1) > 0)
+    assert partial.any(), "fixture has no gene that is zero in only some batches"
+
+    py_result = ComBatSeqFast().fit_transform(counts, batch, group=group)
+
+    np.testing.assert_array_equal(py_result.values[rows], r_out_df.values[rows])
+    np.testing.assert_array_equal(py_result.values[rows], counts.values[rows])
+
+
 # ---------------------------------------------------------------------------
 # Airway e2e — full 64K genes  (slow — skipped by default)
 # ---------------------------------------------------------------------------

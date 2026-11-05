@@ -49,6 +49,10 @@ class ComBat:
         If False, use non-parametric (Monte-Carlo) adjustments.
     mean_only : bool
         If True, only correct the mean (no variance/scale adjustment).
+        Unlike sva::ComBat, the parametric posterior mean of each batch offset
+        uses n = the number of samples in the batch (sva hard-codes n = 1), so
+        batch means are shrunk less. See "Known differences from sva::ComBat"
+        in the README.
     ref_batch : scalar or None
         If given, use this batch as the reference (it will not be changed).
     """

@@ -295,5 +295,81 @@ def test_filter_zero_genes_excludes_batch_zero_gene():
     assert 2 in zero_idx, "Gene 2 (globally zero) should be filtered"
 
 
+# ---------------------------------------------------------------------------
+# Genes left out of the fit, and input checks (regressions, 2026-11-05)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("cls", [ComBatSeq, ComBatSeqFast])
+def test_batch_zero_gene_keeps_original_counts(cls):
+    """A gene all-zero in one batch but expressed in another is returned unchanged, as in R.
+
+    Regression: _reconstruct used to fill every gene left out of the fit with zeros.
+    """
+    df, batch, _ = make_count_data(n_genes=50)
+    df.iloc[0, 6:] = 0  # gene 0: all-zero in batch B, counts in batch A
+    df.iloc[1, :] = 0  # gene 1: all-zero everywhere
+    original = df.iloc[:2].copy()
+
+    result = cls().fit_transform(df, batch)
+
+    pd.testing.assert_frame_equal(result.iloc[:2], original, check_dtype=False)
+    assert (result.iloc[0, :6] > 0).any(), "Batch A counts of gene 0 were lost"
+
+
+def test_batch_zero_gene_logs_warning(caplog):
+    """Genes left unadjusted that have counts in another batch trigger a warning."""
+    df, batch, _ = make_count_data(n_genes=50)
+    df.iloc[0, 6:] = 0
+    with caplog.at_level("WARNING", logger="md_combat.combat_seq"):
+        ComBatSeqFast().fit_transform(df, batch)
+    assert "1 gene(s) are all-zero in at least one batch but have counts in another" in caplog.text
+
+
+@pytest.mark.parametrize("cls", [ComBatSeq, ComBatSeqFast])
+def test_single_sample_batch_raises(cls):
+    """R's ComBat_seq refuses single-sample batches; so does md_combat."""
+    df, _, _ = make_count_data(n_genes=50)
+    batch = ["A"] * 6 + ["B"] * 5 + ["C"]
+    with pytest.raises(ValueError, match=r"Batch\(es\) \['C'\] contain only one sample"):
+        cls().fit_transform(df, batch)
+
+
+@pytest.mark.parametrize("cls", [ComBatSeq, ComBatSeqFast])
+def test_covariate_confounded_with_batch_raises(cls):
+    """A single covariate identical to the batch is refused."""
+    df, batch, _ = make_count_data(n_genes=50)
+    covar = (np.asarray(batch) == "B").astype(float)
+    with pytest.raises(ValueError, match="The covariate is confounded with batch"):
+        cls().fit_transform(df, batch, covar_mod=covar)
+
+
+@pytest.mark.parametrize("cls", [ComBatSeq, ComBatSeqFast])
+def test_group_nested_in_batch_raises(cls):
+    """A group nested in the batch (each level in one batch) is refused."""
+    df, batch, _ = make_count_data(n_genes=50)
+    group = ["a"] * 3 + ["b"] * 3 + ["c"] * 3 + ["d"] * 3
+    with pytest.raises(ValueError, match="At least one covariate is confounded with batch"):
+        cls().fit_transform(df, batch, group=group)
+
+
+@pytest.mark.parametrize("cls", [ComBatSeq, ComBatSeqFast])
+def test_covariates_confounded_with_each_other_raises(cls):
+    """Two identical covariates are refused."""
+    df, batch, _, covar = make_covariate_data()
+    covar = np.column_stack([covar[:, 0], covar[:, 0]])
+    with pytest.raises(ValueError, match="The covariates are confounded with each other"):
+        cls().fit_transform(df, batch, covar_mod=covar)
+
+
+def test_intercept_column_in_covar_mod_is_dropped():
+    """An all-ones column in covar_mod is dropped, as in R, not reported as confounded."""
+    df, batch, _, covar = make_covariate_data()
+    with_intercept = np.column_stack([np.ones(len(batch)), covar])
+    a = ComBatSeqFast().fit_transform(df, batch, covar_mod=covar)
+    b = ComBatSeqFast().fit_transform(df, batch, covar_mod=with_intercept)
+    pd.testing.assert_frame_equal(a, b)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

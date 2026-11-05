@@ -767,20 +767,22 @@ numpy array operations.
 **R:**
 ```r
 adjust_counts_whole[keep, ] <- adjust_counts
-adjust_counts_whole[rm, ]   <- countsOri[rm, ]   # zero genes unchanged
+adjust_counts_whole[rm, ]   <- countsOri[rm, ]   # genes left out: original counts
 ```
 
 **Python:**
 ```python
-corrected = np.zeros_like(count_mat, dtype=float)
-corrected[keep_gene_idx, :] = corrected_nz        # non-zero genes corrected
-# zero_gene_idx rows remain 0                      # zero genes unchanged
+corrected = count_mat.astype(float, copy=True)    # start from the original counts
+corrected[keep_gene_idx, :] = corrected_nz        # overwrite the fitted genes
 corrected = np.round(corrected).clip(0).astype(int)
 ```
 
-R writes both corrected and original zero rows separately. Python initialises
-the full matrix to zero and writes only the non-zero genes, which leaves
-all-zero rows at zero automatically.
+The genes left out in Step 1 are all-zero in **at least one** batch, not necessarily in every batch, so
+they must come back with their original counts. Until 2026-11-05 Python started from `np.zeros_like`,
+which silently zeroed the counts these genes had in other batches (on the airway full matrix: 10,781
+genes, 23,884 counts). `_log_unadjusted_genes` now logs a warning with the number of such genes; filter
+low-expressed genes before ComBat-Seq to avoid them (the ComBat-Seq author's advice, zhangyuqing/ComBat-seq
+issue #3).
 
 **Integer rounding:** R's output from `glmFit` are already non-negative
 integers (edgeR works in count space). Python's scipy quantile mapping returns

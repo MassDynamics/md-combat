@@ -238,7 +238,42 @@ np.testing.assert_allclose(py_result, r_result, rtol=1e-5, atol=1e-8)
 ```
 
 Because `ComBat` is a line-for-line translation of the R source, numerical
-agreement is near-exact (differences are floating-point rounding only).
+agreement is near-exact (differences are floating-point rounding only), with
+the two deliberate exceptions below.
+
+### Known differences from `sva::ComBat`
+
+1. **Mean-only shrinkage (`mean_only=True`, parametric).** Both shrink each
+   batch's mean offset towards the average across batches with
+   `(t2 * n * gamma_hat + d * gamma_bar) / (t2 * n + d)`. sva's mean-only
+   branch passes `n = 1, d = 1` for every batch. md_combat passes `d = 1` and
+   `n` = the number of samples in the batch, which is the usual empirical Bayes
+   posterior mean (a mean over `n` standardised values has variance `1/n`).
+   md_combat therefore shrinks less and removes more of each batch mean, and
+   the gap grows with batch size. On a 479 x 75 metabolomics benchmark it was
+   up to 1.24 log2 (batches of 1–4 samples) and 0.99 log2 (batches of 25).
+   With `n` forced to 1, the two agree to 1e-13. Full ComBat
+   (`mean_only=False`) is unaffected and matches sva, with and without
+   `ref_batch` and with categorical, numeric and mixed `mod`.
+2. **Single-sample batches.** sva prints a note and switches to mean-only
+   ComBat on its own. md_combat raises `ValueError` and asks for
+   `mean_only=True` explicitly, so the change in method is never silent.
+
+Neither difference is covered by the R reference outputs in `tests/expected/`,
+which only hold full ComBat without `mod` or `ref_batch`.
+
+### ComBatSeq behaviour that matches `sva::ComBat_seq`
+
+- **Genes all-zero in a batch** are left out of the fit and returned with their
+  original counts, not batch-adjusted. A warning reports how many of them have
+  counts in another batch; filter low-expressed genes before ComBat-Seq to
+  avoid them. (Before 2026-11-05 these genes came back as all zeros; see
+  `IMPLEMENTATION.md`, ComBat-seq Step 6.)
+- **Single-sample batches** raise `ValueError`, as in R.
+- **Confounded designs** (a covariate or `group` nested in the batch, or
+  covariates confounded with each other) raise `ValueError` with R's messages,
+  instead of being fitted silently through the small ridge term in the NB fit.
+- All-ones columns in `covar_mod` are dropped, as in R.
 
 ### ComBatSeq parity
 
